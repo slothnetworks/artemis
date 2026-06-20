@@ -32,6 +32,16 @@ const (
 	flagBurst          = "burst"
 	flagMetricsAddr    = "metrics-addr"
 	flagReportInterval = "report-interval"
+
+	flagHTTPAddr      = "http-addr"
+	flagGRPCAddr      = "grpc-addr"
+	flagAgentToken    = "agent-token"
+	flagManagerAddr   = "manager-addr"
+	flagAgentName     = "agent-name"
+	flagGroup         = "group"
+	flagTags          = "tags"
+	flagTargets       = "targets"
+	flagFlushInterval = "flush-interval"
 )
 
 var version = "¯\\_(ツ)_/¯"
@@ -134,6 +144,116 @@ var commands = []*cli.Command{
 			},
 		}.Merge(cmd.LogFlags),
 		Action: runServer,
+	},
+	{
+		Name:  "manager",
+		Usage: "Run the artemis manager (control plane)",
+		Flags: cmd.Flags{
+			&cli.StringFlag{
+				Name:    flagHTTPAddr,
+				Usage:   "Address to serve the HTTP API + UI on",
+				Value:   ":8080",
+				EnvVars: []string{strcase.ToSNAKE(flagHTTPAddr)},
+			},
+			&cli.StringFlag{
+				Name:    flagGRPCAddr,
+				Usage:   "Address to serve the gRPC AgentLink on",
+				Value:   ":8443",
+				EnvVars: []string{strcase.ToSNAKE(flagGRPCAddr)},
+			},
+			&cli.StringFlag{
+				Name:    flagAgentToken,
+				Usage:   "Shared bearer token required from agents (empty = open)",
+				EnvVars: []string{strcase.ToSNAKE(flagAgentToken)},
+			},
+		}.Merge(cmd.LogFlags),
+		Action: runManager,
+	},
+	{
+		Name:  "agent",
+		Usage: "Run an artemis agent (echo listener + prober + manager client)",
+		Flags: cmd.Flags{
+			&cli.StringFlag{
+				Name:    flagManagerAddr,
+				Usage:   "Address of the manager's gRPC AgentLink",
+				Value:   "localhost:8443",
+				EnvVars: []string{strcase.ToSNAKE(flagManagerAddr)},
+			},
+			&cli.StringFlag{
+				Name:    flagAgentName,
+				Usage:   "This agent's name (defaults to its listen address)",
+				EnvVars: []string{strcase.ToSNAKE(flagAgentName)},
+			},
+			&cli.StringFlag{
+				Name:    flagAddr,
+				Usage:   "Address for this agent's echo listener",
+				Value:   ":8123",
+				EnvVars: []string{strcase.ToSNAKE(flagAddr)},
+			},
+			&cli.StringFlag{
+				Name:    flagAgentToken,
+				Usage:   "Shared bearer token presented to the manager",
+				EnvVars: []string{strcase.ToSNAKE(flagAgentToken)},
+			},
+			&cli.StringFlag{
+				Name:    flagGroup,
+				Usage:   "Group this agent belongs to (for scoped mesh)",
+				EnvVars: []string{strcase.ToSNAKE(flagGroup)},
+			},
+			&cli.StringSliceFlag{
+				Name:    flagTags,
+				Usage:   "Tags for this agent (for scoped mesh / filtering)",
+				EnvVars: []string{strcase.ToSNAKE(flagTags)},
+			},
+			&cli.StringSliceFlag{
+				Name:    flagTargets,
+				Usage:   "Static peer addresses to probe (host:port); manager assignments override later",
+				EnvVars: []string{strcase.ToSNAKE(flagTargets)},
+			},
+			&cli.StringFlag{
+				Name:    flagProtocol,
+				Usage:   "Protocol for static targets: 'tcp' or 'udp'",
+				Value:   flagProtocolTCP,
+				EnvVars: []string{strcase.ToSNAKE(flagProtocol)},
+			},
+			&cli.DurationFlag{
+				Name:    flagFlushInterval,
+				Usage:   "Interval at which the agent streams telemetry to the manager",
+				Value:   time.Second,
+				EnvVars: []string{strcase.ToSNAKE(flagFlushInterval)},
+			},
+			&cli.DurationFlag{
+				Name:    flagConnBackoff,
+				Usage:   "Reconnect/backoff duration",
+				Value:   time.Second,
+				EnvVars: []string{strcase.ToSNAKE(flagConnBackoff)},
+			},
+			&cli.DurationFlag{
+				Name:    flagSendInterval,
+				Usage:   "Probe send interval",
+				Value:   time.Second,
+				EnvVars: []string{strcase.ToSNAKE(flagSendInterval)},
+			},
+			&cli.DurationFlag{
+				Name:    flagReadTimeout,
+				Usage:   "Read timeout",
+				Value:   2 * time.Second,
+				EnvVars: []string{strcase.ToSNAKE(flagReadTimeout)},
+			},
+			&cli.DurationFlag{
+				Name:    flagWriteTimeout,
+				Usage:   "Write timeout",
+				Value:   5 * time.Second,
+				EnvVars: []string{strcase.ToSNAKE(flagWriteTimeout)},
+			},
+			&cli.IntFlag{
+				Name:    flagPayloadSize,
+				Usage:   "Probe payload size in bytes (0 = default text payload)",
+				Value:   0,
+				EnvVars: []string{strcase.ToSNAKE(flagPayloadSize)},
+			},
+		}.Merge(cmd.LogFlags),
+		Action: runAgent,
 	},
 }
 

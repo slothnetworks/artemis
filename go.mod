@@ -4,6 +4,7 @@ go 1.24.1
 
 require (
 	github.com/ettle/strcase v0.2.0
+	github.com/google/uuid v1.6.0
 	github.com/hamba/cmd/v2 v2.15.0
 	github.com/hamba/logger/v2 v2.9.0
 	github.com/hamba/testutils v0.7.0
@@ -28,7 +29,6 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/grafana/pyroscope-go v1.2.1 // indirect
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.8 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3 // indirect

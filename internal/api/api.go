@@ -30,9 +30,46 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	mux.HandleFunc("GET /api/topology", s.topology)
 	mux.HandleFunc("GET /api/agents", s.agents)
+	mux.HandleFunc("GET /api/groups", s.groups)
+	mux.HandleFunc("GET /api/mesh", s.getMesh)
+	mux.HandleFunc("PUT /api/mesh", s.putMesh)
 	mux.HandleFunc("GET /api/edges/{src}/{dst}/series", s.series)
 	mux.HandleFunc("GET /api/stream", s.stream)
 	return mux
+}
+
+type meshDoc struct {
+	Mode   string             `json:"mode"`
+	Params manager.MeshParams `json:"params"`
+}
+
+func (s *Server) groups(w http.ResponseWriter, _ *http.Request) {
+	seen := map[string]struct{}{}
+	var groups []string
+	for _, a := range s.mgr.Registry().List() {
+		if _, ok := seen[a.Group]; !ok {
+			seen[a.Group] = struct{}{}
+			groups = append(groups, a.Group)
+		}
+	}
+	writeJSON(w, groups)
+}
+
+func (s *Server) getMesh(w http.ResponseWriter, _ *http.Request) {
+	mode, params := s.mgr.Mesh().Get()
+	writeJSON(w, meshDoc{Mode: mode, Params: params})
+}
+
+func (s *Server) putMesh(w http.ResponseWriter, r *http.Request) {
+	var doc meshDoc
+	if err := json.NewDecoder(r.Body).Decode(&doc); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.mgr.Mesh().Set(doc.Mode, doc.Params)
+	s.mgr.RecomputeMesh()
+	mode, params := s.mgr.Mesh().Get()
+	writeJSON(w, meshDoc{Mode: mode, Params: params})
 }
 
 func (s *Server) topology(w http.ResponseWriter, _ *http.Request) {

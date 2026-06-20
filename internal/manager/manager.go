@@ -23,6 +23,7 @@ type Manager struct {
 	reg   *Registry
 	store *Store
 	bcast *Broadcast
+	mesh  *Mesh
 	log   *logger.Logger
 }
 
@@ -32,9 +33,13 @@ func New(log *logger.Logger) *Manager {
 		reg:   NewRegistry(),
 		store: NewStore(0),
 		bcast: NewBroadcast(),
+		mesh:  NewMesh(),
 		log:   log,
 	}
 }
+
+// Mesh returns the mesh configuration.
+func (m *Manager) Mesh() *Mesh { return m.mesh }
 
 // Registry returns the agent registry.
 func (m *Manager) Registry() *Registry { return m.reg }
@@ -95,6 +100,7 @@ func (m *Manager) Link(stream pb.AgentLink_LinkServer) error {
 
 	defer func() {
 		m.reg.Remove(id)
+		m.RecomputeMesh()
 		log.Info("Agent disconnected")
 	}()
 
@@ -119,6 +125,10 @@ func (m *Manager) Link(stream pb.AgentLink_LinkServer) error {
 			}
 		}
 	}()
+
+	// Now that this agent can receive, recompute and push mesh assignments to
+	// the whole fleet (the new agent and its new peers).
+	m.RecomputeMesh()
 
 	src := info.Name
 	for {
