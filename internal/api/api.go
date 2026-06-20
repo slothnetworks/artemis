@@ -13,33 +13,57 @@ import (
 	"github.com/slothnetworks/artemis/internal/manager"
 )
 
-// Server is the manager's HTTP API.
+// Server is the manager's HTTP API + UI.
 type Server struct {
-	mgr *manager.Manager
-	log *logger.Logger
+	mgr  *manager.Manager
+	log  *logger.Logger
+	ui   *ui
+	auth *Auth
 }
 
-// New returns an API server backed by the given manager.
-func New(mgr *manager.Manager, log *logger.Logger) *Server {
-	return &Server{mgr: mgr, log: log}
+// New returns an API server backed by the given manager. auth may be nil (open).
+func New(mgr *manager.Manager, log *logger.Logger, auth *Auth) (*Server, error) {
+	u, err := newUI()
+	if err != nil {
+		return nil, err
+	}
+	if auth == nil {
+		auth = NewAuth("", "")
+	}
+	return &Server{mgr: mgr, log: log, ui: u, auth: auth}, nil
 }
 
 // Handler returns the HTTP handler with all routes registered.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+
+	// Open endpoints.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
-	mux.HandleFunc("GET /api/topology", s.topology)
-	mux.HandleFunc("GET /api/agents", s.agents)
-	mux.HandleFunc("GET /api/groups", s.groups)
-	mux.HandleFunc("GET /api/mesh", s.getMesh)
-	mux.HandleFunc("PUT /api/mesh", s.putMesh)
-	mux.HandleFunc("GET /api/edges/{src}/{dst}/series", s.series)
-	mux.HandleFunc("GET /api/alerts", s.alerts)
-	mux.HandleFunc("GET /api/silences", s.listSilences)
-	mux.HandleFunc("POST /api/silences", s.addSilence)
-	mux.HandleFunc("DELETE /api/silences/{id}", s.deleteSilence)
-	mux.HandleFunc("GET /api/stream", s.stream)
+	mux.HandleFunc("GET /login", s.handleLoginPage)
+	mux.HandleFunc("POST /auth/local", s.handleLocalAuth)
+	mux.HandleFunc("GET /auth/logout", s.handleLogout)
+	mux.Handle("GET /static/", staticHandler())
+
+	// UI pages (guarded).
+	mux.HandleFunc("GET /{$}", s.auth.guard(false, s.page("dashboard")))
+	mux.HandleFunc("GET /agents", s.auth.guard(false, s.page("agents")))
+	mux.HandleFunc("GET /mesh", s.auth.guard(false, s.page("mesh")))
+	mux.HandleFunc("GET /alerts", s.auth.guard(false, s.page("alerts")))
+
+	// API (guarded).
+	api := func(p string, h http.HandlerFunc) { mux.HandleFunc(p, s.auth.guard(true, h)) }
+	api("GET /api/topology", s.topology)
+	api("GET /api/agents", s.agents)
+	api("GET /api/groups", s.groups)
+	api("GET /api/mesh", s.getMesh)
+	api("PUT /api/mesh", s.putMesh)
+	api("GET /api/edges/{src}/{dst}/series", s.series)
+	api("GET /api/alerts", s.alerts)
+	api("GET /api/silences", s.listSilences)
+	api("POST /api/silences", s.addSilence)
+	api("DELETE /api/silences/{id}", s.deleteSilence)
+	api("GET /api/stream", s.stream)
 	return mux
 }
 

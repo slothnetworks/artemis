@@ -66,9 +66,16 @@ func runManager(c *cli.Context) error {
 		}
 	}()
 
-	// HTTP server (REST + SSE).
+	// HTTP server (REST + SSE + UI).
 	httpAddr := c.String(flagHTTPAddr)
-	apiSrv := api.New(mgr, log)
+	auth := api.NewAuth(c.String(flagAdminUser), c.String(flagAdminPassHash))
+	apiSrv, err := api.New(mgr, log, auth)
+	if err != nil {
+		return err
+	}
+	if auth.Enabled() {
+		log.Info("UI authentication enabled")
+	}
 	hsrv := &http.Server{ //nolint:gosec // local control-plane endpoint
 		Addr:    httpAddr,
 		Handler: api.LogMiddleware(log, apiSrv.Handler()),

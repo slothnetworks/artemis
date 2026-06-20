@@ -1,0 +1,55 @@
+{{define "content"}}
+<div class="page-head"><h1>Mesh</h1></div>
+<div class="card">
+    <div class="card-head">Mesh configuration</div>
+    <div class="card-body">
+        <div class="form-grid">
+            <div>
+                <label>Mode</label>
+                <select id="mode">
+                    <option value="full">full (every agent ↔ every agent)</option>
+                    <option value="intra-group">intra-group</option>
+                    <option value="inter-group">inter-group</option>
+                    <option value="off">off</option>
+                </select>
+            </div>
+            <div>
+                <label>Protocol</label>
+                <select id="protocol"><option value="tcp">tcp</option><option value="udp">udp</option></select>
+            </div>
+            <div><label>Interval (ms)</label><input type="text" id="interval_ms" value="1000"></div>
+            <div><label>Payload size (bytes)</label><input type="text" id="payload_size" value="0"></div>
+            <div><label>Burst</label><input type="text" id="burst" value="1"></div>
+        </div>
+        <div class="form-actions">
+            <button class="btn" id="save">Apply mesh</button>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "page-script"}}
+<script>
+async function load() {
+    const m = await api("GET", "/api/mesh");
+    document.getElementById("mode").value = m.mode;
+    document.getElementById("protocol").value = m.params.protocol || "tcp";
+    document.getElementById("interval_ms").value = m.params.interval_ms || 1000;
+    document.getElementById("payload_size").value = m.params.payload_size || 0;
+    document.getElementById("burst").value = m.params.burst || 1;
+}
+document.getElementById("save").addEventListener("click", async () => {
+    const body = {
+        mode: document.getElementById("mode").value,
+        params: {
+            protocol: document.getElementById("protocol").value,
+            interval_ms: parseInt(document.getElementById("interval_ms").value, 10) || 1000,
+            payload_size: parseInt(document.getElementById("payload_size").value, 10) || 0,
+            burst: parseInt(document.getElementById("burst").value, 10) || 1,
+        },
+    };
+    try { await api("PUT", "/api/mesh", body); toast("mesh applied"); } catch (e) { toast(e.message, true); }
+});
+load();
+</script>
+{{end}}

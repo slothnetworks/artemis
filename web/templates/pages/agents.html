@@ -1,0 +1,32 @@
+{{define "content"}}
+<div class="page-head"><h1>Agents</h1></div>
+<div class="card">
+    <table>
+        <thead><tr><th>Name</th><th>Group</th><th>Listen</th><th>IPv4</th><th>Status</th><th>Last seen</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
+    </table>
+</div>
+{{end}}
+
+{{define "page-script"}}
+<script>
+async function load() {
+    const agents = await api("GET", "/api/agents");
+    const tb = document.getElementById("rows");
+    if (!agents || !agents.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">No agents enrolled.</td></tr>'; return; }
+    tb.innerHTML = agents.map(a => {
+        const badge = a.status === "online" ? "b-ok" : "b-bad";
+        const ls = a.last_seen ? new Date(a.last_seen).toLocaleTimeString() : "—";
+        return `<tr>
+            <td style="color:#e2e8f0;font-weight:500">${a.name}</td>
+            <td>${a.group ? '<span class="chip">'+a.group+'</span>' : '<span class="muted">—</span>'}</td>
+            <td><code>${a.listen_addr||""}</code></td>
+            <td><code>${(a.ipv4||[]).join(", ")}</code></td>
+            <td><span class="badge ${badge}">${a.status}</span></td>
+            <td class="muted">${ls}</td>
+        </tr>`;
+    }).join("");
+}
+load(); setInterval(load, 3000);
+</script>
+{{end}}

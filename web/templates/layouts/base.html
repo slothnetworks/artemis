@@ -1,0 +1,57 @@
+{{define "base"}}<!DOCTYPE html>
+<html lang="en" class="h-full scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} — artemis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode:'class', theme:{ extend:{ colors:{
+            brand:{ 50:'#f0f4ff', 500:'#6366f1', 600:'#4f46e5', 700:'#4338ca' }
+        } } } }
+    </script>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/vendor/uplot.min.css">
+</head>
+<body class="h-full text-gray-100">
+<div class="flex h-screen">
+    <aside class="w-60 shrink-0 sidebar flex flex-col">
+        <div class="px-5 py-6 border-b border-slate-800/40">
+            <a href="/" class="flex items-center gap-3 no-underline">
+                <div class="w-9 h-9 rounded-lg logo-badge flex items-center justify-center">
+                    <span class="text-white font-bold">A</span>
+                </div>
+                <div>
+                    <div class="font-bold text-white text-sm leading-tight">artemis</div>
+                    <div class="text-xs text-slate-500 leading-tight">connection mesh</div>
+                </div>
+            </a>
+        </div>
+        <nav class="flex-1 px-3 py-4 space-y-1">
+            {{template "navlink" dict "href" "/" "id" "dashboard" "label" "Dashboard" "active" .Active}}
+            {{template "navlink" dict "href" "/agents" "id" "agents" "label" "Agents" "active" .Active}}
+            {{template "navlink" dict "href" "/mesh" "id" "mesh" "label" "Mesh" "active" .Active}}
+            {{template "navlink" dict "href" "/alerts" "id" "alerts" "label" "Alerts" "active" .Active}}
+        </nav>
+        <div class="px-4 py-4 border-t border-slate-800/40 text-xs">
+            <div class="text-slate-300 truncate">{{.User}}</div>
+            {{if .ShowLogout}}<a href="/auth/logout" class="text-red-400 hover:text-red-300 no-underline">Sign out</a>{{end}}
+        </div>
+    </aside>
+
+    <main class="flex-1 overflow-y-auto">
+        <div class="max-w-6xl mx-auto px-8 py-8">
+            {{template "content" .}}
+        </div>
+    </main>
+</div>
+<div id="toast" class="toast hidden"></div>
+<script src="/static/js/app.js"></script>
+{{block "page-script" .}}{{end}}
+</body>
+</html>
+{{end}}
+
+{{define "navlink"}}<a href="{{.href}}" class="nav-link {{if eq .active .id}}active{{end}} no-underline">
+    <span>{{.label}}</span>
+</a>{{end}}

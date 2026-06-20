@@ -1,0 +1,69 @@
+{{define "content"}}
+<div class="page-head"><h1>Alerts</h1></div>
+
+<div class="card">
+    <div class="card-head">Active alerts</div>
+    <table>
+        <thead><tr><th>Severity</th><th>Rule</th><th>Edge</th><th>Reason</th><th>Since</th><th></th></tr></thead>
+        <tbody id="alerts"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
+    </table>
+</div>
+
+<div class="card">
+    <div class="card-head">Silences</div>
+    <div class="card-body">
+        <div class="form-grid">
+            <div><label>Rule (blank = any)</label><input type="text" id="s-rule" placeholder="packet_loss"></div>
+            <div><label>Src (blank = any)</label><input type="text" id="s-src"></div>
+            <div><label>Dst (blank = any)</label><input type="text" id="s-dst"></div>
+            <div><label>Hours</label><input type="text" id="s-hours" value="1"></div>
+        </div>
+        <div class="form-actions"><button class="btn" id="add-silence">Add silence</button></div>
+        <table style="margin-top:1rem">
+            <thead><tr><th>Rule</th><th>Src</th><th>Dst</th><th>Until</th><th></th></tr></thead>
+            <tbody id="silences"></tbody>
+        </table>
+    </div>
+</div>
+{{end}}
+
+{{define "page-script"}}
+<script>
+async function loadAlerts() {
+    const al = await api("GET", "/api/alerts");
+    const tb = document.getElementById("alerts");
+    if (!al || !al.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">No active alerts.</td></tr>'; return; }
+    tb.innerHTML = al.map(a => {
+        const sev = a.severity === "critical" ? "b-bad" : "b-warn";
+        const edge = a.dst ? `${a.src} → ${a.dst}` : a.src;
+        const since = a.started_at ? new Date(a.started_at).toLocaleTimeString() : "";
+        return `<tr>
+            <td><span class="badge ${sev}">${a.severity}</span></td>
+            <td><span class="chip">${a.rule}</span>${a.silenced ? ' <span class="muted">(silenced)</span>' : ''}</td>
+            <td><code>${edge}</code></td><td>${a.reason||""}</td><td class="muted">${since}</td>
+            <td class="actions"><button class="btn btn-ghost btn-xs" onclick="silenceRule('${a.rule}','${a.src}','${a.dst||''}')">silence</button></td>
+        </tr>`;
+    }).join("");
+}
+async function loadSilences() {
+    const sl = await api("GET", "/api/silences");
+    const tb = document.getElementById("silences");
+    tb.innerHTML = (sl||[]).map(s => `<tr>
+        <td>${s.rule||'<span class="muted">any</span>'}</td><td>${s.src||""}</td><td>${s.dst||""}</td>
+        <td class="muted">${new Date(s.until).toLocaleString()}</td>
+        <td class="actions"><button class="btn btn-danger btn-xs" onclick="delSilence('${s.id}')">delete</button></td>
+    </tr>`).join("");
+}
+async function addSilence(rule, src, dst, hours) {
+    const until = new Date(Date.now() + hours*3600*1000).toISOString();
+    await api("POST", "/api/silences", { rule, src, dst, until, author: "ui" });
+    loadSilences();
+}
+window.silenceRule = (rule, src, dst) => addSilence(rule, src, dst, 1).then(() => toast("silenced"));
+window.delSilence = async (id) => { await api("DELETE", "/api/silences/" + id); toast("deleted"); loadSilences(); };
+document.getElementById("add-silence").addEventListener("click", () =>
+    addSilence(document.getElementById("s-rule").value, document.getElementById("s-src").value,
+        document.getElementById("s-dst").value, parseFloat(document.getElementById("s-hours").value)||1).then(()=>toast("added")));
+loadAlerts(); loadSilences(); setInterval(loadAlerts, 3000);
+</script>
+{{end}}

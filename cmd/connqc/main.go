@@ -38,6 +38,8 @@ const (
 	flagAgentToken    = "agent-token"
 	flagPostgresDSN   = "postgres-dsn"
 	flagClickHouseDSN = "clickhouse-dsn"
+	flagAdminUser     = "admin-user"
+	flagAdminPassHash = "admin-pass-hash"
 	flagManagerAddr   = "manager-addr"
 	flagAgentName     = "agent-name"
 	flagGroup         = "group"
@@ -178,8 +180,24 @@ var commands = []*cli.Command{
 				Usage:   "ClickHouse DSN for samples (empty = in-memory only)",
 				EnvVars: []string{strcase.ToSNAKE(flagClickHouseDSN)},
 			},
+			&cli.StringFlag{
+				Name:    flagAdminUser,
+				Usage:   "Admin username for the UI (empty = UI open, no auth)",
+				EnvVars: []string{strcase.ToSNAKE(flagAdminUser)},
+			},
+			&cli.StringFlag{
+				Name:    flagAdminPassHash,
+				Usage:   "Bcrypt hash of the admin password (generate with 'connqc hashpw')",
+				EnvVars: []string{strcase.ToSNAKE(flagAdminPassHash)},
+			},
 		}.Merge(cmd.LogFlags),
 		Action: runManager,
+	},
+	{
+		Name:      "hashpw",
+		Usage:     "Generate a bcrypt hash of a password for admin-pass-hash",
+		ArgsUsage: "<password>",
+		Action:    runHashPw,
 	},
 	{
 		Name:  "agent",

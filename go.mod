@@ -14,6 +14,7 @@ require (
 	github.com/prometheus/client_golang v1.21.1
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli/v2 v2.27.7
+	golang.org/x/crypto v0.48.0
 	golang.org/x/sys v0.41.0
 	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.5
