@@ -1,5 +1,5 @@
 version: 2
-project_name: connqc
+project_name: artemis
 dist: dist
 
 gomod:
@@ -16,7 +16,7 @@ builds:
     goarch:
       - amd64
       - arm64
-    ignore:
+    ignore: []
     env:
       - CGO_ENABLED=0
 
@@ -29,15 +29,15 @@ checksum:
 release:
   github:
     owner: nitrado
-    name: connqc
+    name: artemis
 
 dockers:
   - dockerfile: Dockerfile
     goos: linux
     goarch: amd64
     image_templates:
-      - "ghcr.io/nitrado/connqc:{{ .Version }}"
-      - "ghcr.io/nitrado/connqc:latest"
+      - "ghcr.io/slothnetworks/artemis:{{ .Version }}"
+      - "ghcr.io/slothnetworks/artemis:latest"
 
 snapshot:
   version_template: "dev-{{ slice .FullCommit 0 8}}"

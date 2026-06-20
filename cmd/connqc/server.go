@@ -7,9 +7,9 @@ import (
 
 	"github.com/hamba/cmd/v2"
 	lctx "github.com/hamba/logger/v2/ctx"
-	"github.com/nitrado/connqc"
-	"github.com/nitrado/connqc/tcp"
-	"github.com/nitrado/connqc/udp"
+	"github.com/slothnetworks/artemis/internal/probe"
+	"github.com/slothnetworks/artemis/internal/probe/tcp"
+	"github.com/slothnetworks/artemis/internal/probe/udp"
 	"github.com/urfave/cli/v2"
 )
 
@@ -25,7 +25,7 @@ func runServer(c *cli.Context) error { //nolint:funlen // Keep it simple and rea
 	readTimeout := c.Duration(flagReadTimeout)
 	writeTimeout := c.Duration(flagWriteTimeout)
 
-	srv := connqc.NewServer(bufferSize, readTimeout, writeTimeout, log)
+	srv := probe.NewServer(bufferSize, readTimeout, writeTimeout, log)
 
 	tcpSrv, err := tcp.NewServer(srv)
 	if err != nil {

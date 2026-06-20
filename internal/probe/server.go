@@ -1,4 +1,4 @@
-package connqc
+package probe
 
 import (
 	"errors"

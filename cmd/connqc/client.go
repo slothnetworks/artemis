@@ -6,7 +6,7 @@ import (
 
 	"github.com/hamba/cmd/v2"
 	lctx "github.com/hamba/logger/v2/ctx"
-	"github.com/nitrado/connqc"
+	"github.com/slothnetworks/artemis/internal/probe"
 	"github.com/urfave/cli/v2"
 )
 
@@ -31,7 +31,7 @@ func runClient(c *cli.Context) error {
 
 	log = log.With(lctx.Str("protocol", protocol))
 
-	client := connqc.NewClient(backoff, sendInterval, readTimeout, writeTimeout, log)
+	client := probe.NewClient(backoff, sendInterval, readTimeout, writeTimeout, log)
 	go func() {
 		client.Run(ctx, protocol, c.String(flagAddr))
 		cancel()

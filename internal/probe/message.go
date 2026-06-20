@@ -1,4 +1,4 @@
-package connqc
+package probe
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	"io"
 	"math"
 
-	"github.com/nitrado/connqc/internal/buffr"
+	"github.com/slothnetworks/artemis/internal/buffr"
 )
 
 // Message represents a connqc message.
@@ -66,12 +66,26 @@ type Decoder struct {
 	r io.Reader
 }
 
-// NewDecoder returns a decoder for the given reader.
+// DefaultDecodeBuffer is the default decode buffer size, large enough to hold a
+// full datagram so large / MTU-probing payloads are not truncated on the read
+// path.
+const DefaultDecodeBuffer = 65535
+
+// NewDecoder returns a decoder for the given reader using DefaultDecodeBuffer.
 func NewDecoder(r io.Reader) Decoder {
+	return NewDecoderSize(r, DefaultDecodeBuffer)
+}
+
+// NewDecoderSize returns a decoder for the given reader with an explicit buffer
+// size (the maximum single-read / datagram size it can handle).
+func NewDecoderSize(r io.Reader, size int) Decoder {
+	if size <= 0 {
+		size = DefaultDecodeBuffer
+	}
 	return Decoder{
 		// The buffered reader solves the issue of reading packets at once (required for UDP) while
 		// still being able to read byte by byte to verify the input.
-		r: buffr.NewReader(r, 1500),
+		r: buffr.NewReader(r, size),
 	}
 }
 

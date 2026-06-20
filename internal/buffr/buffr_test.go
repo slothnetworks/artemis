@@ -5,7 +5,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/nitrado/connqc/internal/buffr"
+	"github.com/slothnetworks/artemis/internal/buffr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

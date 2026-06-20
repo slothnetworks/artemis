@@ -1,4 +1,4 @@
-module github.com/nitrado/connqc
+module github.com/slothnetworks/artemis
 
 go 1.24.1
 

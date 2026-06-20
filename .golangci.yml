@@ -1,3 +1,5 @@
+version: "1.59"
+
 run:
   tests: false
   timeout: 5m
@@ -15,7 +17,6 @@ linters-settings:
           - pkg: pkg/errors
 
 linters:
-  enable-all: true
   disable:
     - tenv # deprecated
     - exhaustive
@@ -31,8 +32,3 @@ linters:
     - varnamelen
     - wrapcheck
     - wsl
-
-issues:
-  exclude-use-default: false
-  exclude:
-    - "ST1000: at least one file in a package should have a package comment"

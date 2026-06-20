@@ -4,14 +4,14 @@
     <a href="#license">
         <img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat" />
     </a>
-    <a href="https://goreportcard.com/report/github.com/nitrado/connqc">
-        <img src="https://goreportcard.com/badge/github.com/nitrado/connqc" />
+    <a href="https://goreportcard.com/report/github.com/slothnetworks/artemis">
+        <img src="https://goreportcard.com/badge/github.com/slothnetworks/artemis" />
     </a>
-    <a href="https://github.com/nitrado/connqc/releases/latest">
-        <img src="https://img.shields.io/github/release/nitrado/connqc.svg?style=flat" />
+    <a href="https://github.com/slothnetworks/artemis/releases/latest">
+        <img src="https://img.shields.io/github/release/slothnetworks/artemis.svg?style=flat" />
     </a>
-    <a href="https://pkg.go.dev/github.com/nitrado/connqc">
-        <img src="https://pkg.go.dev/badge/github.com/nitrado/connqc?utm_source=godoc" />
+    <a href="https://pkg.go.dev/github.com/slothnetworks/artemis">
+        <img src="https://pkg.go.dev/badge/github.com/slothnetworks/artemis?utm_source=godoc" />
     </a>
 </p>
 
