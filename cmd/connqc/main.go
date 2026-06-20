@@ -36,6 +36,8 @@ const (
 	flagHTTPAddr      = "http-addr"
 	flagGRPCAddr      = "grpc-addr"
 	flagAgentToken    = "agent-token"
+	flagPostgresDSN   = "postgres-dsn"
+	flagClickHouseDSN = "clickhouse-dsn"
 	flagManagerAddr   = "manager-addr"
 	flagAgentName     = "agent-name"
 	flagGroup         = "group"
@@ -165,6 +167,16 @@ var commands = []*cli.Command{
 				Name:    flagAgentToken,
 				Usage:   "Shared bearer token required from agents (empty = open)",
 				EnvVars: []string{strcase.ToSNAKE(flagAgentToken)},
+			},
+			&cli.StringFlag{
+				Name:    flagPostgresDSN,
+				Usage:   "PostgreSQL DSN for events/alerts (empty = in-memory only)",
+				EnvVars: []string{strcase.ToSNAKE(flagPostgresDSN)},
+			},
+			&cli.StringFlag{
+				Name:    flagClickHouseDSN,
+				Usage:   "ClickHouse DSN for samples (empty = in-memory only)",
+				EnvVars: []string{strcase.ToSNAKE(flagClickHouseDSN)},
 			},
 		}.Merge(cmd.LogFlags),
 		Action: runManager,

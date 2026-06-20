@@ -14,28 +14,75 @@ import (
 	lctx "github.com/hamba/logger/v2/ctx"
 	pb "github.com/slothnetworks/artemis/internal/pb/artemis/v1"
 	"github.com/slothnetworks/artemis/internal/pbconv"
+	"github.com/slothnetworks/artemis/internal/store"
 )
+
+func eventKindString(k pb.EventKind) string {
+	switch k {
+	case pb.EventKind_EVENT_KIND_DROPPED:
+		return "packet_loss"
+	case pb.EventKind_EVENT_KIND_TIMEOUT:
+		return "timeout"
+	case pb.EventKind_EVENT_KIND_SIZE_MISMATCH:
+		return "size_mismatch"
+	default:
+		return "unspecified"
+	}
+}
+
+func directionString(d pb.Direction) string {
+	switch d {
+	case pb.Direction_DIRECTION_FORWARD:
+		return "forward"
+	case pb.Direction_DIRECTION_RETURN:
+		return "return"
+	default:
+		return "none"
+	}
+}
 
 // Manager is the control plane. It implements the AgentLink gRPC service.
 type Manager struct {
 	pb.UnimplementedAgentLinkServer
 
-	reg   *Registry
-	store *Store
-	bcast *Broadcast
-	mesh  *Mesh
-	log   *logger.Logger
+	reg        *Registry
+	store      *Store
+	bcast      *Broadcast
+	mesh       *Mesh
+	sampleSink store.SampleSink
+	eventSink  store.EventSink
+	log        *logger.Logger
 }
 
-// New returns a Manager.
-func New(log *logger.Logger) *Manager {
-	return &Manager{
-		reg:   NewRegistry(),
-		store: NewStore(0),
-		bcast: NewBroadcast(),
-		mesh:  NewMesh(),
-		log:   log,
+// Option configures a Manager.
+type Option func(*Manager)
+
+// WithSampleSink sets the durable time-series sink for samples.
+func WithSampleSink(s store.SampleSink) Option {
+	return func(m *Manager) { m.sampleSink = s }
+}
+
+// WithEventSink sets the durable relational sink for events.
+func WithEventSink(s store.EventSink) Option {
+	return func(m *Manager) { m.eventSink = s }
+}
+
+// New returns a Manager. By default it persists nowhere (in-memory only); pass
+// WithSampleSink / WithEventSink to enable durable storage.
+func New(log *logger.Logger, opts ...Option) *Manager {
+	m := &Manager{
+		reg:        NewRegistry(),
+		store:      NewStore(0),
+		bcast:      NewBroadcast(),
+		mesh:       NewMesh(),
+		sampleSink: store.NopSampleSink{},
+		eventSink:  store.NopEventSink{},
+		log:        log,
 	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
 }
 
 // Mesh returns the mesh configuration.
@@ -161,15 +208,28 @@ func (m *Manager) handleAgentMessage(src string, msg *pb.AgentMessage) {
 			at = time.Now()
 		}
 		m.store.Ingest(src, dst, snap, at)
+		m.sampleSink.WriteSample(store.SampleRow{Ts: at, Src: src, Dst: dst, Snap: snap})
 		m.publishEdge(src, dst, snap, at)
 	case *pb.AgentMessage_Event:
-		// Fault events drive alerting in a later phase; surface for now.
 		e := v.Event
 		m.log.Info("Fault event",
 			lctx.Str("src", src),
 			lctx.Str("dst", e.GetEdge().GetDst()),
 			lctx.Str("kind", e.GetKind().String()),
 		)
+		if err := m.eventSink.WriteEvent(context.Background(), store.Event{
+			Ts:         e.GetTs().AsTime(),
+			Src:        src,
+			Dst:        e.GetEdge().GetDst(),
+			Kind:       eventKindString(e.GetKind()),
+			ProbeID:    e.GetProbeId(),
+			SentBytes:  int(e.GetSentBytes()),
+			RecvBytes:  int(e.GetRecvBytes()),
+			ChecksumOK: e.GetChecksumOk(),
+			Direction:  directionString(e.GetDirection()),
+		}); err != nil {
+			m.log.Error("Persist event", lctx.Err(err))
+		}
 	case *pb.AgentMessage_MtrSnapshot:
 		// Persisted/attached in a later phase.
 		m.log.Info("MTR snapshot", lctx.Str("src", src), lctx.Str("dst", v.MtrSnapshot.GetEdge().GetDst()))
