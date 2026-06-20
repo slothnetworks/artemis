@@ -11,10 +11,18 @@ import (
 	lctx "github.com/hamba/logger/v2/ctx"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	_ "github.com/slothnetworks/artemis/docs/swagger" // registers the OpenAPI spec
 	"github.com/slothnetworks/artemis/internal/alerting"
 	"github.com/slothnetworks/artemis/internal/manager"
 	"github.com/slothnetworks/artemis/internal/stats"
+	"github.com/slothnetworks/artemis/internal/store"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
+
+// @title       Artemis API
+// @version     1.0
+// @description Control-plane REST/SSE API for the artemis connection-quality mesh.
+// @BasePath    /
 
 // Server is the manager's HTTP API + UI.
 type Server struct {
@@ -60,6 +68,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /alerts", s.auth.guard(false, s.page("alerts")))
 	mux.HandleFunc("GET /diff", s.auth.guard(false, s.page("diff")))
 
+	// Swagger UI (guarded like the rest of the UI).
+	mux.HandleFunc("GET /swagger/", s.auth.guard(false, httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")).ServeHTTP))
+
 	// API (guarded).
 	api := func(p string, h http.HandlerFunc) { mux.HandleFunc(p, s.auth.guard(true, h)) }
 	api("GET /api/topology", s.topology)
@@ -77,14 +88,35 @@ func (s *Server) Handler() http.Handler {
 	return mux
 }
 
+// alerts lists currently firing alerts.
+// @Summary  Active alerts
+// @Tags     alerts
+// @Produce  json
+// @Success  200 {array} store.Alert
+// @Router   /api/alerts [get]
 func (s *Server) alerts(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, s.mgr.Alerts())
+	var out []store.Alert = s.mgr.Alerts()
+	writeJSON(w, out)
 }
 
+// listSilences lists active silences.
+// @Summary  List silences
+// @Tags     alerts
+// @Produce  json
+// @Success  200 {array} alerting.Silence
+// @Router   /api/silences [get]
 func (s *Server) listSilences(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, s.mgr.Silences().List())
 }
 
+// addSilence creates a silence.
+// @Summary  Add silence
+// @Tags     alerts
+// @Accept   json
+// @Produce  json
+// @Param    silence body alerting.Silence true "silence matcher + expiry"
+// @Success  200 {object} alerting.Silence
+// @Router   /api/silences [post]
 func (s *Server) addSilence(w http.ResponseWriter, r *http.Request) {
 	var sl alerting.Silence
 	if err := json.NewDecoder(r.Body).Decode(&sl); err != nil {
@@ -94,6 +126,12 @@ func (s *Server) addSilence(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.mgr.Silences().Add(sl))
 }
 
+// deleteSilence removes a silence by id.
+// @Summary  Delete silence
+// @Tags     alerts
+// @Param    id path string true "silence id"
+// @Success  204
+// @Router   /api/silences/{id} [delete]
 func (s *Server) deleteSilence(w http.ResponseWriter, r *http.Request) {
 	s.mgr.Silences().Remove(r.PathValue("id"))
 	w.WriteHeader(http.StatusNoContent)
@@ -104,6 +142,12 @@ type meshDoc struct {
 	Params manager.MeshParams `json:"params"`
 }
 
+// groups lists the distinct agent groups.
+// @Summary  Agent groups
+// @Tags     mesh
+// @Produce  json
+// @Success  200 {array} string
+// @Router   /api/groups [get]
 func (s *Server) groups(w http.ResponseWriter, _ *http.Request) {
 	seen := map[string]struct{}{}
 	var groups []string
@@ -116,11 +160,25 @@ func (s *Server) groups(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, groups)
 }
 
+// getMesh returns the current mesh mode and parameters.
+// @Summary  Get mesh config
+// @Tags     mesh
+// @Produce  json
+// @Success  200 {object} meshDoc
+// @Router   /api/mesh [get]
 func (s *Server) getMesh(w http.ResponseWriter, _ *http.Request) {
 	mode, params := s.mgr.Mesh().Get()
 	writeJSON(w, meshDoc{Mode: mode, Params: params})
 }
 
+// putMesh sets the mesh mode and parameters and recomputes assignments.
+// @Summary  Set mesh config
+// @Tags     mesh
+// @Accept   json
+// @Produce  json
+// @Param    mesh body meshDoc true "mesh mode + params"
+// @Success  200 {object} meshDoc
+// @Router   /api/mesh [put]
 func (s *Server) putMesh(w http.ResponseWriter, r *http.Request) {
 	var doc meshDoc
 	if err := json.NewDecoder(r.Body).Decode(&doc); err != nil {
@@ -133,20 +191,47 @@ func (s *Server) putMesh(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, meshDoc{Mode: mode, Params: params})
 }
 
+// topology returns the mesh nodes and edges with latest metrics.
+// @Summary  Mesh topology
+// @Tags     mesh
+// @Produce  json
+// @Success  200 {object} manager.TopologyView
+// @Router   /api/topology [get]
 func (s *Server) topology(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, s.mgr.Topology())
 }
 
+// agents lists enrolled agents.
+// @Summary  List agents
+// @Tags     agents
+// @Produce  json
+// @Success  200 {array} manager.AgentInfo
+// @Router   /api/agents [get]
 func (s *Server) agents(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, s.mgr.Registry().List())
 }
 
+// series returns the recent snapshot history for an edge.
+// @Summary  Edge time-series
+// @Tags     edges
+// @Produce  json
+// @Param    src path string true "source agent"
+// @Param    dst path string true "destination agent"
+// @Success  200 {array} manager.TimedSnapshot
+// @Router   /api/edges/{src}/{dst}/series [get]
 func (s *Server) series(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.mgr.Store().Series(r.PathValue("src"), r.PathValue("dst")))
 }
 
 // diff returns the reciprocal A→B vs B→A series plus summary deltas of the
 // latest snapshots, exposing one-way / asymmetric faults.
+// @Summary  Reciprocal edge diff
+// @Tags     edges
+// @Produce  json
+// @Param    a path string true "agent A"
+// @Param    b path string true "agent B"
+// @Success  200 {object} map[string]interface{}
+// @Router   /api/edges/{a}/{b}/diff [get]
 func (s *Server) diff(w http.ResponseWriter, r *http.Request) {
 	a, b := r.PathValue("a"), r.PathValue("b")
 	ab := s.mgr.Store().Series(a, b)

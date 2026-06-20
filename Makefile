@@ -20,6 +20,13 @@ proto:
 	@echo "==> Done"
 .PHONY: proto
 
+# Generate Swagger / OpenAPI docs (requires swag)
+swagger:
+	@echo "==> Generating swagger"
+	@swag init -g internal/api/api.go --parseInternal --parseDependency --exclude sample-work,web-sample -o docs/swagger
+	@echo "==> Done"
+.PHONY: swagger
+
 # Run all tests
 test:
 	@go test -cover -race ./...
