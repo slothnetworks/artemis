@@ -1,0 +1,56 @@
+name: CI
+
+# Continuous integration runs whenever a pull request for the main branch
+# is created or updated.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      GOLANGCI_LINT_VERSION: v1.60.3
+
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run Linter
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: ${{ inputs.GOLANGCI_LINT_VERSION }}
+
+      - name: Setup gotestsum
+        uses: gertd/action-gotestsum@v3.0.0
+        with:
+          gotestsum_version: v1.12.0
+
+      - name: Run Tests
+        run: gotestsum --junitfile tests.xml --format pkgname -- -cover -race ./...
+
+      - name: Test Summary
+        uses: test-summary/action@v2
+        with:
+          paths: "tests.xml"
+        if: always()
+
+      # Run GoReleaser.
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean --snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,43 @@
+version: 2
+project_name: connqc
+dist: dist
+
+gomod:
+  proxy: true
+
+builds:
+  - main: ./cmd/connqc
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{ .CommitDate }}
+    goos:
+      - windows
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+    env:
+      - CGO_ENABLED=0
+
+archives:
+  - formats: ["binary"]
+
+checksum:
+  name_template: '{{ .ProjectName }}_checksums.txt'
+
+release:
+  github:
+    owner: nitrado
+    name: connqc
+
+dockers:
+  - dockerfile: Dockerfile
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - "ghcr.io/nitrado/connqc:{{ .Version }}"
+      - "ghcr.io/nitrado/connqc:latest"
+
+snapshot:
+  version_template: "dev-{{ slice .FullCommit 0 8}}"

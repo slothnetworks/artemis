@@ -1,0 +1,38 @@
+run:
+  tests: false
+  timeout: 5m
+
+linters-settings:
+  cyclop:
+    max-complexity: 12
+    skip-tests: true
+  gofumpt:
+    extra-rules: true
+  depguard:
+    rules:
+      deprecated:
+        deny:
+          - pkg: pkg/errors
+
+linters:
+  enable-all: true
+  disable:
+    - tenv # deprecated
+    - exhaustive
+    - exhaustruct
+    - forcetypeassert
+    - gochecknoglobals
+    - gochecknoinits
+    - err113
+    - mnd
+    - ireturn
+    - nlreturn
+    - nonamedreturns
+    - varnamelen
+    - wrapcheck
+    - wsl
+
+issues:
+  exclude-use-default: false
+  exclude:
+    - "ST1000: at least one file in a package should have a package comment"
