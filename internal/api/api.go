@@ -9,6 +9,7 @@ import (
 
 	"github.com/hamba/logger/v2"
 	lctx "github.com/hamba/logger/v2/ctx"
+	"github.com/slothnetworks/artemis/internal/alerting"
 	"github.com/slothnetworks/artemis/internal/manager"
 )
 
@@ -34,8 +35,34 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/mesh", s.getMesh)
 	mux.HandleFunc("PUT /api/mesh", s.putMesh)
 	mux.HandleFunc("GET /api/edges/{src}/{dst}/series", s.series)
+	mux.HandleFunc("GET /api/alerts", s.alerts)
+	mux.HandleFunc("GET /api/silences", s.listSilences)
+	mux.HandleFunc("POST /api/silences", s.addSilence)
+	mux.HandleFunc("DELETE /api/silences/{id}", s.deleteSilence)
 	mux.HandleFunc("GET /api/stream", s.stream)
 	return mux
+}
+
+func (s *Server) alerts(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, s.mgr.Alerts())
+}
+
+func (s *Server) listSilences(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, s.mgr.Silences().List())
+}
+
+func (s *Server) addSilence(w http.ResponseWriter, r *http.Request) {
+	var sl alerting.Silence
+	if err := json.NewDecoder(r.Body).Decode(&sl); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, s.mgr.Silences().Add(sl))
+}
+
+func (s *Server) deleteSilence(w http.ResponseWriter, r *http.Request) {
+	s.mgr.Silences().Remove(r.PathValue("id"))
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type meshDoc struct {

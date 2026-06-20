@@ -43,11 +43,38 @@ type SampleSink interface {
 	Close() error
 }
 
+// Alert is a stateful, grouped alert derived from events/samples.
+type Alert struct {
+	ID          string    `json:"id"`
+	Src         string    `json:"src"`
+	Dst         string    `json:"dst"`
+	Rule        string    `json:"rule"`
+	Severity    string    `json:"severity"`
+	State       string    `json:"state"` // firing | resolved
+	Reason      string    `json:"reason"`
+	Silenced    bool      `json:"silenced"`
+	StartedAt   time.Time `json:"started_at"`
+	ResolvedAt  time.Time `json:"resolved_at"`
+	LastEventAt time.Time `json:"last_event_at"`
+	EventCount  int       `json:"event_count"`
+}
+
 // EventSink persists discrete events.
 type EventSink interface {
 	WriteEvent(ctx context.Context, e Event) error
 	Close() error
 }
+
+// AlertSink persists stateful alerts (upsert by Alert.ID).
+type AlertSink interface {
+	UpsertAlert(ctx context.Context, a Alert) error
+}
+
+// NopAlertSink discards alerts.
+type NopAlertSink struct{}
+
+// UpsertAlert implements AlertSink.
+func (NopAlertSink) UpsertAlert(context.Context, Alert) error { return nil }
 
 // NopSampleSink discards samples; QuerySeries returns nothing.
 type NopSampleSink struct{}

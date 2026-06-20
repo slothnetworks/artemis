@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/slothnetworks/artemis/internal/store"
@@ -67,6 +68,31 @@ func (s *Sink) WriteEvent(ctx context.Context, e store.Event) error {
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
 		e.Ts, e.Src, e.Dst, e.Protocol, e.Kind, int64(e.ProbeID), e.SentBytes, e.RecvBytes, e.ChecksumOK, e.Direction)
 	return err
+}
+
+// UpsertAlert inserts or updates an alert by its id.
+func (s *Sink) UpsertAlert(ctx context.Context, a store.Alert) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO alerts (id, src, dst, rule, severity, state, reason, silenced, started_at, resolved_at, last_event_at, event_count)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+		ON CONFLICT (id) DO UPDATE SET
+			severity = EXCLUDED.severity,
+			state = EXCLUDED.state,
+			reason = EXCLUDED.reason,
+			silenced = EXCLUDED.silenced,
+			resolved_at = EXCLUDED.resolved_at,
+			last_event_at = EXCLUDED.last_event_at,
+			event_count = EXCLUDED.event_count`,
+		a.ID, a.Src, a.Dst, a.Rule, a.Severity, a.State, a.Reason, a.Silenced,
+		nullTime(a.StartedAt), nullTime(a.ResolvedAt), nullTime(a.LastEventAt), a.EventCount)
+	return err
+}
+
+func nullTime(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t
 }
 
 // Close closes the connection pool.

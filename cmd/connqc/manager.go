@@ -43,8 +43,8 @@ func runManager(c *cli.Context) error {
 			return err
 		}
 		defer func() { _ = sink.Close() }()
-		opts = append(opts, manager.WithEventSink(sink))
-		log.Info("PostgreSQL event storage enabled")
+		opts = append(opts, manager.WithEventSink(sink), manager.WithAlertSink(sink))
+		log.Info("PostgreSQL event + alert storage enabled")
 	}
 
 	mgr := manager.New(log, opts...)

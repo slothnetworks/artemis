@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hamba/logger/v2"
 	lctx "github.com/hamba/logger/v2/ctx"
+	"github.com/slothnetworks/artemis/internal/alerting"
 	pb "github.com/slothnetworks/artemis/internal/pb/artemis/v1"
 	"github.com/slothnetworks/artemis/internal/pbconv"
 	"github.com/slothnetworks/artemis/internal/store"
@@ -51,6 +52,9 @@ type Manager struct {
 	mesh       *Mesh
 	sampleSink store.SampleSink
 	eventSink  store.EventSink
+	alertSink  store.AlertSink
+	alerts     *alerting.Engine
+	silences   *alerting.Silences
 	log        *logger.Logger
 }
 
@@ -67,8 +71,13 @@ func WithEventSink(s store.EventSink) Option {
 	return func(m *Manager) { m.eventSink = s }
 }
 
+// WithAlertSink sets the durable sink for alerts.
+func WithAlertSink(s store.AlertSink) Option {
+	return func(m *Manager) { m.alertSink = s }
+}
+
 // New returns a Manager. By default it persists nowhere (in-memory only); pass
-// WithSampleSink / WithEventSink to enable durable storage.
+// WithSampleSink / WithEventSink / WithAlertSink to enable durable storage.
 func New(log *logger.Logger, opts ...Option) *Manager {
 	m := &Manager{
 		reg:        NewRegistry(),
@@ -77,12 +86,47 @@ func New(log *logger.Logger, opts ...Option) *Manager {
 		mesh:       NewMesh(),
 		sampleSink: store.NopSampleSink{},
 		eventSink:  store.NopEventSink{},
+		alertSink:  store.NopAlertSink{},
 		log:        log,
 	}
 	for _, opt := range opts {
 		opt(m)
 	}
+	m.silences = alerting.NewSilences()
+	m.alerts = alerting.New(alerting.Config{}, m.alertSink, alerting.NewLogNotifier(log), m.silences, m.publishAlert)
 	return m
+}
+
+// Alerts returns the currently firing alerts.
+func (m *Manager) Alerts() []store.Alert { return m.alerts.Active() }
+
+// Silences returns the silence set.
+func (m *Manager) Silences() *alerting.Silences { return m.silences }
+
+func (m *Manager) publishAlert(a store.Alert) {
+	data, err := json.Marshal(struct {
+		Type string `json:"type"`
+		store.Alert
+	}{Type: "alert", Alert: a})
+	if err != nil {
+		return
+	}
+	m.bcast.Publish(data)
+}
+
+// EvaluateAlerts runs one alert evaluation pass over the current mesh state.
+func (m *Manager) EvaluateAlerts() {
+	now := time.Now()
+	edges := m.store.Edges()
+	in := make([]alerting.EdgeInput, 0, len(edges))
+	for _, e := range edges {
+		in = append(in, alerting.EdgeInput{Src: e.Src, Dst: e.Dst, Snap: e.Snapshot, UpdatedAt: e.UpdatedAt})
+	}
+	var agents []alerting.AgentInput
+	for _, a := range m.reg.List() {
+		agents = append(agents, alerting.AgentInput{Name: a.Name, Stale: a.Status == "stale"})
+	}
+	m.alerts.Evaluate(in, agents, now)
 }
 
 // Mesh returns the mesh configuration.
@@ -217,6 +261,9 @@ func (m *Manager) handleAgentMessage(src string, msg *pb.AgentMessage) {
 			lctx.Str("dst", e.GetEdge().GetDst()),
 			lctx.Str("kind", e.GetKind().String()),
 		)
+		if e.GetKind() == pb.EventKind_EVENT_KIND_SIZE_MISMATCH {
+			m.alerts.RecordSizeMismatch(src, e.GetEdge().GetDst())
+		}
 		if err := m.eventSink.WriteEvent(context.Background(), store.Event{
 			Ts:         e.GetTs().AsTime(),
 			Src:        src,
@@ -258,16 +305,21 @@ func (m *Manager) markStale(timeout time.Duration) {
 	m.reg.mu.Unlock()
 }
 
-// RunMaintenance periodically marks stale agents until ctx is done.
+// RunMaintenance periodically marks stale agents and evaluates alerts until ctx
+// is done.
 func (m *Manager) RunMaintenance(ctx context.Context, staleAfter time.Duration) {
-	t := time.NewTicker(staleAfter / 2)
-	defer t.Stop()
+	stale := time.NewTicker(staleAfter / 2)
+	defer stale.Stop()
+	eval := time.NewTicker(2 * time.Second)
+	defer eval.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-t.C:
+		case <-stale.C:
 			m.markStale(staleAfter)
+		case <-eval.C:
+			m.EvaluateAlerts()
 		}
 	}
 }
