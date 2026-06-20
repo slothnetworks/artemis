@@ -9,8 +9,11 @@ import (
 
 	"github.com/hamba/logger/v2"
 	lctx "github.com/hamba/logger/v2/ctx"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/slothnetworks/artemis/internal/alerting"
 	"github.com/slothnetworks/artemis/internal/manager"
+	"github.com/slothnetworks/artemis/internal/stats"
 )
 
 // Server is the manager's HTTP API + UI.
@@ -45,11 +48,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /auth/logout", s.handleLogout)
 	mux.Handle("GET /static/", staticHandler())
 
+	// Prometheus scrape endpoint (open, like a standard exporter).
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(s.mgr.MetricsCollector())
+	mux.Handle("GET /metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+
 	// UI pages (guarded).
 	mux.HandleFunc("GET /{$}", s.auth.guard(false, s.page("dashboard")))
 	mux.HandleFunc("GET /agents", s.auth.guard(false, s.page("agents")))
 	mux.HandleFunc("GET /mesh", s.auth.guard(false, s.page("mesh")))
 	mux.HandleFunc("GET /alerts", s.auth.guard(false, s.page("alerts")))
+	mux.HandleFunc("GET /diff", s.auth.guard(false, s.page("diff")))
 
 	// API (guarded).
 	api := func(p string, h http.HandlerFunc) { mux.HandleFunc(p, s.auth.guard(true, h)) }
@@ -59,6 +68,7 @@ func (s *Server) Handler() http.Handler {
 	api("GET /api/mesh", s.getMesh)
 	api("PUT /api/mesh", s.putMesh)
 	api("GET /api/edges/{src}/{dst}/series", s.series)
+	api("GET /api/edges/{a}/{b}/diff", s.diff)
 	api("GET /api/alerts", s.alerts)
 	api("GET /api/silences", s.listSilences)
 	api("POST /api/silences", s.addSilence)
@@ -133,6 +143,32 @@ func (s *Server) agents(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) series(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.mgr.Store().Series(r.PathValue("src"), r.PathValue("dst")))
+}
+
+// diff returns the reciprocal A→B vs B→A series plus summary deltas of the
+// latest snapshots, exposing one-way / asymmetric faults.
+func (s *Server) diff(w http.ResponseWriter, r *http.Request) {
+	a, b := r.PathValue("a"), r.PathValue("b")
+	ab := s.mgr.Store().Series(a, b)
+	ba := s.mgr.Store().Series(b, a)
+	latAB := latestSnap(ab)
+	latBA := latestSnap(ba)
+	writeJSON(w, map[string]any{
+		"a": a, "b": b,
+		"ab": ab, "ba": ba,
+		"delta": map[string]float64{
+			"loss_pct":  latAB.LossPct - latBA.LossPct,
+			"p95_ms":    float64(latAB.P95-latBA.P95) / 1e6,
+			"jitter_ms": float64(latAB.Jitter-latBA.Jitter) / 1e6,
+		},
+	})
+}
+
+func latestSnap(series []manager.TimedSnapshot) stats.Snapshot {
+	if len(series) == 0 {
+		return stats.Snapshot{}
+	}
+	return series[len(series)-1].Snap
 }
 
 // stream serves Server-Sent Events of live edge updates.

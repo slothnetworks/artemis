@@ -29,6 +29,7 @@ var pages = map[string]struct{ title, active string }{
 	"agents":    {"Agents", "agents"},
 	"mesh":      {"Mesh", "mesh"},
 	"alerts":    {"Alerts", "alerts"},
+	"diff":      {"Edge diff", "diff"},
 }
 
 type ui struct {

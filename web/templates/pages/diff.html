@@ -1,0 +1,51 @@
+{{define "content"}}
+<div class="crumb"><a href="/">Dashboard</a> / Edge diff</div>
+<div class="page-head"><h1 id="title">Reciprocal edge diff</h1></div>
+
+<div class="card">
+    <div class="card-head">Direction deltas (A→B minus B→A)</div>
+    <div class="card-body"><div id="delta" class="muted">loading…</div></div>
+</div>
+
+<div class="card">
+    <div class="card-head" id="ab-title">A → B</div>
+    <div class="card-body"><div id="ab-chart" style="width:100%;height:200px"></div></div>
+</div>
+<div class="card">
+    <div class="card-head" id="ba-title">B → A</div>
+    <div class="card-body"><div id="ba-chart" style="width:100%;height:200px"></div></div>
+</div>
+{{end}}
+
+{{define "page-script"}}
+<script src="/static/js/vendor/uplot.iife.min.js"></script>
+<script>
+const q = new URLSearchParams(location.search);
+const A = q.get("a"), B = q.get("b");
+
+function plot(el, series) {
+    const xs = [], p95 = [], loss = [];
+    (series || []).forEach(pt => { xs.push(new Date(pt.at).getTime()/1000); p95.push((pt.snap.p95||0)/1e6); loss.push(pt.snap.loss_pct||0); });
+    new uPlot({ width: document.getElementById(el).clientWidth, height: 200,
+        series: [{}, { label: "p95 ms", stroke: "#6366f1" }, { label: "loss %", stroke: "#f87171", scale: "%" }],
+        scales: { "%": { side: 1 } }, axes: [{ stroke:"#94a3b8" }, { stroke:"#94a3b8" }, { side:1, scale:"%", stroke:"#94a3b8" }],
+    }, [xs, p95, loss], document.getElementById(el));
+}
+
+async function load() {
+    if (!A || !B) { document.getElementById("delta").textContent = "missing ?a= and ?b="; return; }
+    document.getElementById("title").textContent = `${A} ↔ ${B}`;
+    document.getElementById("ab-title").textContent = `${A} → ${B}`;
+    document.getElementById("ba-title").textContent = `${B} → ${A}`;
+    const d = await api("GET", `/api/edges/${encodeURIComponent(A)}/${encodeURIComponent(B)}/diff`);
+    const dl = d.delta || {};
+    const fmt = (v, u) => `<span class="chip">${v>=0?"+":""}${v.toFixed(2)}${u}</span>`;
+    let worse = Math.abs(dl.loss_pct) > 1 || Math.abs(dl.p95_ms) > 20
+        ? `<span class="badge b-warn">${dl.p95_ms>0||dl.loss_pct>0?A+"→"+B:B+"→"+A} is worse</span>` : `<span class="badge b-ok">symmetric</span>`;
+    document.getElementById("delta").innerHTML = `${worse} &nbsp; loss ${fmt(dl.loss_pct||0,"%")} &nbsp; p95 ${fmt(dl.p95_ms||0,"ms")} &nbsp; jitter ${fmt(dl.jitter_ms||0,"ms")}`;
+    plot("ab-chart", d.ab);
+    plot("ba-chart", d.ba);
+}
+load();
+</script>
+{{end}}

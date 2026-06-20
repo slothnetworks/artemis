@@ -56,9 +56,10 @@ type Agent struct {
 	coll *stats.RollingCollector
 	log  *logger.Logger
 
-	runCtx  context.Context
-	mu      sync.Mutex
-	probers map[string]context.CancelFunc // keyed by target addr
+	runCtx      context.Context
+	mu          sync.Mutex
+	probers     map[string]context.CancelFunc // keyed by target addr
+	targetNames map[string]string             // target addr → peer name
 }
 
 // New returns an Agent.
@@ -67,10 +68,11 @@ func New(cfg Config, log *logger.Logger) *Agent {
 		cfg.FlushInterval = time.Second
 	}
 	return &Agent{
-		cfg:     cfg,
-		coll:    stats.NewRollingCollector(0),
-		log:     log,
-		probers: make(map[string]context.CancelFunc),
+		cfg:         cfg,
+		coll:        stats.NewRollingCollector(0),
+		log:         log,
+		probers:     make(map[string]context.CancelFunc),
+		targetNames: make(map[string]string),
 	}
 }
 
@@ -109,6 +111,13 @@ func (a *Agent) applyAssignment(targets []*pb.Target) {
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	// Remember peer names so telemetry edges are labeled name→name.
+	for addr, t := range desired {
+		if t.GetName() != "" {
+			a.targetNames[addr] = t.GetName()
+		}
+	}
 
 	// Stop probers no longer desired.
 	for addr, cancel := range a.probers {
@@ -257,8 +266,14 @@ func (a *Agent) recvLoop(stream pb.AgentLink_LinkClient) {
 func (a *Agent) flush(stream pb.AgentLink_LinkClient) error {
 	now := time.Now()
 	for _, snap := range a.coll.Snapshot() {
+		dst := snap.Target
+		a.mu.Lock()
+		if name, ok := a.targetNames[snap.Target]; ok {
+			dst = name
+		}
+		a.mu.Unlock()
 		if err := stream.Send(&pb.AgentMessage{Msg: &pb.AgentMessage_Sample{Sample: &pb.Sample{
-			Edge:     &pb.Edge{Src: a.cfg.Name, Dst: snap.Target},
+			Edge:     &pb.Edge{Src: a.cfg.Name, Dst: dst},
 			Snapshot: pbconv.SnapshotToPB(snap),
 			Ts:       timestamppb.New(now),
 		}}}); err != nil {

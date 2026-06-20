@@ -94,6 +94,7 @@ cy.on("tap", "edge", async (evt) => {
     const [src, dst] = e.id().split("__");
     document.getElementById("edge-panel").classList.remove("hidden");
     document.getElementById("edge-title").textContent = `${src} → ${dst}`;
+    document.getElementById("edge-diff").href = `/diff?a=${encodeURIComponent(src)}&b=${encodeURIComponent(dst)}`;
     const series = await api("GET", `/api/edges/${encodeURIComponent(src)}/${encodeURIComponent(dst)}/series`);
     const xs = [], p95 = [], loss = [];
     (series || []).forEach(pt => {
