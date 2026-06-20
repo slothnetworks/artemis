@@ -117,6 +117,12 @@ func (c *Client) Run(ctx context.Context, protocol, addr string) {
 			}
 		}
 
+		if ps, ok := c.coll.(stats.PathSetter); ok {
+			if mtu, mss := inspectPath(conn); mtu > 0 || mss > 0 {
+				ps.SetPath(addr, mtu, mss)
+			}
+		}
+
 		if err = c.handleConn(ctx, conn, addr); err != nil {
 			log.Error("Connection error", lctx.Err(err))
 		}

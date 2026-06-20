@@ -1,0 +1,155 @@
+syntax = "proto3";
+
+package artemis.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/slothnetworks/artemis/internal/pb/artemis/v1;artemisv1";
+
+// AgentLink is the bidirectional control + telemetry stream between an agent and
+// the manager. The agent streams enrollment, samples and fault events up; the
+// manager streams enroll acks, test assignments and one-shot MTR requests down.
+service AgentLink {
+  rpc Link(stream AgentMessage) returns (stream ManagerMessage);
+}
+
+// Edge identifies a directed test link from a source agent to a destination.
+message Edge {
+  string src = 1;
+  string dst = 2;
+}
+
+// EventKind classifies a discrete fault event.
+enum EventKind {
+  EVENT_KIND_UNSPECIFIED = 0;
+  EVENT_KIND_DROPPED = 1;
+  EVENT_KIND_TIMEOUT = 2;
+  EVENT_KIND_SIZE_MISMATCH = 3;
+}
+
+// Direction identifies which path a modification was observed on.
+enum Direction {
+  DIRECTION_UNSPECIFIED = 0;
+  DIRECTION_FORWARD = 1;
+  DIRECTION_RETURN = 2;
+}
+
+// Snapshot is a point-in-time view of a target's connection-quality statistics.
+message Snapshot {
+  string target = 1;
+  uint64 sent = 2;
+  uint64 received = 3;
+  uint64 dropped = 4;
+  uint64 timeout = 5;
+  double loss_pct = 6;
+  int64 min_ns = 7;
+  int64 avg_ns = 8;
+  int64 p50_ns = 9;
+  int64 p95_ns = 10;
+  int64 p99_ns = 11;
+  int64 max_ns = 12;
+  int64 jitter_ns = 13;
+  uint64 bytes = 14;
+  double throughput = 15;
+  int32 path_mtu = 16;
+  int32 effective_mss = 17;
+  int64 window_ns = 18;
+  google.protobuf.Timestamp started_at = 19;
+  google.protobuf.Timestamp ended_at = 20;
+}
+
+// Enroll registers an agent with the manager.
+message Enroll {
+  string name = 1;
+  string listen_addr = 2;
+  repeated string protocols = 3;
+  repeated string tags = 4;
+  string group = 5;
+  repeated string ipv4 = 6;
+  repeated string ipv6 = 7;
+}
+
+// Sample carries a per-edge statistics snapshot.
+message Sample {
+  Edge edge = 1;
+  Snapshot snapshot = 2;
+  google.protobuf.Timestamp ts = 3;
+  bool replayed = 4; // true when drained from the local store-and-forward spool
+}
+
+// Event carries a discrete fault observation.
+message Event {
+  Edge edge = 1;
+  EventKind kind = 2;
+  int32 sent_bytes = 3;
+  int32 recv_bytes = 4;
+  bool checksum_ok = 5;
+  Direction direction = 6;
+  uint64 probe_id = 7;
+  google.protobuf.Timestamp ts = 8;
+  bool replayed = 9;
+}
+
+// MtrHop is a single parsed hop from an MTR/traceroute snapshot.
+message MtrHop {
+  int32 hop = 1;
+  string host = 2;
+  double loss_pct = 3;
+  double avg_ms = 4;
+}
+
+// MtrSnapshot carries the output of a one-shot MTR run captured on alert.
+message MtrSnapshot {
+  Edge edge = 1;
+  string alert_id = 2;
+  string raw_output = 3;
+  repeated MtrHop hops = 4;
+  google.protobuf.Timestamp started_at = 5;
+  string tool = 6;
+}
+
+// AgentMessage is anything an agent sends to the manager.
+message AgentMessage {
+  oneof msg {
+    Enroll enroll = 1;
+    Sample sample = 2;
+    Event event = 3;
+    MtrSnapshot mtr_snapshot = 4;
+  }
+}
+
+// Target describes one peer an agent should probe.
+message Target {
+  string name = 1;
+  string addr = 2;
+  string protocol = 3;
+  int64 interval_ms = 4;
+  int32 payload_size = 5;
+  repeated int32 payload_sizes = 6;
+  int32 burst = 7;
+}
+
+// EnrollAck confirms enrollment and assigns a stable agent id.
+message EnrollAck {
+  string agent_id = 1;
+}
+
+// Assignment is the full set of targets an agent should currently probe.
+message Assignment {
+  repeated Target targets = 1;
+}
+
+// RunMtr asks an agent to run a one-shot MTR toward an edge's destination.
+message RunMtr {
+  Edge edge = 1;
+  string alert_id = 2;
+}
+
+// ManagerMessage is anything the manager sends to an agent.
+message ManagerMessage {
+  oneof msg {
+    EnrollAck enroll_ack = 1;
+    Assignment assignment = 2;
+    RunMtr run_mtr = 3;
+  }
+}

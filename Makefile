@@ -12,6 +12,14 @@ tidy:
 	@echo "==> Done"
 .PHONY: tidy
 
+# Generate protobuf / gRPC code (requires buf, protoc-gen-go, protoc-gen-go-grpc)
+proto:
+	@echo "==> Generating protobuf"
+	@buf lint
+	@buf generate
+	@echo "==> Done"
+.PHONY: proto
+
 # Run all tests
 test:
 	@go test -cover -race ./...

@@ -21,7 +21,10 @@ func runServer(c *cli.Context) error { //nolint:funlen // Keep it simple and rea
 		return err
 	}
 
-	bufferSize := c.Int(flagBufferSize)
+	// The read buffer is hardcoded to the maximum datagram size so legitimate
+	// payloads are never truncated; a size mismatch then means a real fault.
+	const bufferSize = 65535
+
 	readTimeout := c.Duration(flagReadTimeout)
 	writeTimeout := c.Duration(flagWriteTimeout)
 

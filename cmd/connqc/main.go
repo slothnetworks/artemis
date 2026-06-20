@@ -21,12 +21,17 @@ const (
 	flagProtocolUDP = "udp"
 	flagAddr        = "addr"
 
-	flagBufferSize   = "buffer-size"
 	flagReadTimeout  = "read-timeout"
 	flagWriteTimeout = "write-timeout"
 
 	flagConnBackoff  = "backoff"
 	flagSendInterval = "interval"
+
+	flagPayloadSize    = "payload-size"
+	flagPayloadSizes   = "payload-sizes"
+	flagBurst          = "burst"
+	flagMetricsAddr    = "metrics-addr"
+	flagReportInterval = "report-interval"
 )
 
 var version = "¯\\_(ツ)_/¯"
@@ -74,6 +79,34 @@ var commands = []*cli.Command{
 				Value:   5 * time.Second,
 				EnvVars: []string{strcase.ToSNAKE(flagWriteTimeout)},
 			},
+			&cli.IntFlag{
+				Name:    flagPayloadSize,
+				Usage:   "Fixed probe payload size in bytes (0 = default text payload)",
+				Value:   0,
+				EnvVars: []string{strcase.ToSNAKE(flagPayloadSize)},
+			},
+			&cli.IntSliceFlag{
+				Name:    flagPayloadSizes,
+				Usage:   "Payload sizes to rotate through per probe (MTU/fragmentation sweep); overrides --payload-size",
+				EnvVars: []string{strcase.ToSNAKE(flagPayloadSizes)},
+			},
+			&cli.IntFlag{
+				Name:    flagBurst,
+				Usage:   "Number of probes to send per interval",
+				Value:   1,
+				EnvVars: []string{strcase.ToSNAKE(flagBurst)},
+			},
+			&cli.StringFlag{
+				Name:    flagMetricsAddr,
+				Usage:   "Address to serve Prometheus /metrics on (empty = disabled)",
+				EnvVars: []string{strcase.ToSNAKE(flagMetricsAddr)},
+			},
+			&cli.DurationFlag{
+				Name:    flagReportInterval,
+				Usage:   "Interval for periodic stats summaries (0 = end-of-run only)",
+				Value:   0,
+				EnvVars: []string{strcase.ToSNAKE(flagReportInterval)},
+			},
 		}.Merge(cmd.LogFlags),
 		Action: runClient,
 	},
@@ -86,12 +119,6 @@ var commands = []*cli.Command{
 				Usage:   "The address to listen on for probe messages",
 				Value:   ":8123",
 				EnvVars: []string{strcase.ToSNAKE(flagAddr)},
-			},
-			&cli.IntFlag{
-				Name:    flagBufferSize,
-				Usage:   "The size of the read buffer used by the server",
-				Value:   512,
-				EnvVars: []string{strcase.ToSNAKE(flagBufferSize)},
 			},
 			&cli.DurationFlag{
 				Name:    flagReadTimeout,
