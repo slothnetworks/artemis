@@ -1,4 +1,4 @@
-# Connection Quality Checker
+# Artemis — Connection Quality Mesh
 
 <p align="center">
     <a href="#license">
@@ -7,114 +7,63 @@
     <a href="https://goreportcard.com/report/github.com/slothnetworks/artemis">
         <img src="https://goreportcard.com/badge/github.com/slothnetworks/artemis" />
     </a>
-    <a href="https://github.com/slothnetworks/artemis/releases/latest">
-        <img src="https://img.shields.io/github/release/slothnetworks/artemis.svg?style=flat" />
-    </a>
-    <a href="https://pkg.go.dev/github.com/slothnetworks/artemis">
-        <img src="https://pkg.go.dev/badge/github.com/slothnetworks/artemis?utm_source=godoc" />
-    </a>
 </p>
 
-`connqc` is a tool to assess the reliability of the network transport between networked hosts.
-Known connection issues that `connqc` has been designed to detect include:
-- Unstable connection between hosts
-- Firewall dropping packets intermittently
-- Ports or port combinations are blocked or become blocked
-- Routes flip flop causing spontaneous connection issues
+Artemis assesses the reliability of network transport **between many hosts at once**.
+A central **manager** orchestrates a fleet of **agents** that probe each other over
+TCP/UDP, stream per-edge statistics up in real time, and surface a live topology graph,
+alerting, and history. It builds on the original `connqc` probe (still available as the
+standalone `server`/`client` commands).
 
-While other tools exist that are similar to `connqc`, such as **ping**, **netcat** and **iperf**, they do not establish a connection that is maintained without user interaction while also reporting the connection quality.
+Detects: unstable links, intermittent firewall drops, blocked ports, route flaps,
+high latency / jitter, packet loss, **in-flight payload modification**, and MTU/MSS
+clamping.
 
-`connqc` consists of a server that listens for TCP or UDP probing messages, and a client that sends said messages.
-The client logs the probing duration and warns if some messages get lost.
+## Quickstart
 
-## Usage
-
-<p align="left">
-        <img width="500px" src="./docs/assets/server.jpg" />
-</p>
-
-<p align="right">
-        <img width="500px" src="./docs/assets/client.gif" />
-</p>
-
-### Server
-
-Start the server. The default address is `:8123`:
+### Local mesh (no databases — in-memory)
 
 ```shell
-$ connqc server 
+connqc manager --http-addr :8080 --grpc-addr :8443
+connqc agent --manager-addr localhost:8443 --agent-name a1 --addr 127.0.0.1:19101
+connqc agent --manager-addr localhost:8443 --agent-name a2 --addr 127.0.0.1:19102
+# open http://localhost:8080
 ```
 
-or specify a port:
+The manager **auto-meshes** enrolled agents (each probes every other). The dashboard
+shows a live topology graph (edges colored by loss/latency); click an edge for a
+latency/loss chart and a reciprocal A↔B diff.
+
+### Full stack (Postgres + ClickHouse + Prometheus + Grafana)
 
 ```shell
-$ connqc server --addr=":1234"
+docker compose -f docker/docker-compose.yml up --build
+# UI :8080 · Prometheus :9090 · Grafana :3000 (admin/admin)
 ```
 
-#### More Options
+See [docs/deployment.md](docs/deployment.md) and [docs/architecture.md](docs/architecture.md).
+For development, [CLAUDE.md](CLAUDE.md) is the single source of truth.
 
-The `server` command supports the following additional arguments.
+## Commands
+
+| Command | Role |
+|---|---|
+| `connqc manager` | Control plane: gRPC AgentLink, mesh, storage, alerting, UI + API + `/metrics` |
+| `connqc agent` | Echo listener + probers + manager client |
+| `connqc server` | Standalone echo server |
+| `connqc client` | Standalone prober (stats, Prometheus, summaries) |
+| `connqc hashpw <pw>` | Bcrypt hash for `--admin-pass-hash` |
+
+### Standalone server / client
 
 ```shell
-OPTIONS:
-   --addr value                         The address to listen on for probe messages (default: ":8123") [$ADDR]
-   --buffer-size value                  The size of the read buffer used by the server (default: 512) [$BUFFER_SIZE]
-   --read-timeout value                 The duration after which the server should timeout when reading from a connection (default: 2s) [$READ_TIMEOUT]
-   --write-timeout value                The duration after which the server should timeout when writing to a connection (default: 5s) [$WRITE_TIMEOUT]
-   --log.format value                   Specify the format of logs. Supported formats: 'logfmt', 'json', 'console' [$LOG_FORMAT]
-   --log.level value                    Specify the log level. e.g. 'debug', 'info', 'error'. (default: "info") [$LOG_LEVEL]
-   --log.ctx value [ --log.ctx value ]  A list of context field appended to every log. Format: key=value. [$LOG_CTX]
-   --help, -h                           show help
+connqc server --addr :8123
+connqc client --addr 127.0.0.1:8123 --interval 200ms --payload-size 9000 --burst 5 --metrics-addr :9090
 ```
 
-#### Firewall
-
-For use on firewalls managed with [`firewall-cmd`](https://firewalld.org/documentation/man-pages/firewall-cmd.html):
-
-```shell
-$ firewall-cmd --add-port=8123/tcp
-# and later after the test is done
-$ firewall-cmd --remove-port=8123/tcp
-```
-
-### Client
-
-Start the client with the connqc server's address:
-
-```shell
-$ connqc client --addr="127.0.0.1:8123"
-```
-
-To enable more human-readable logs, set the log format:
-
-```shell
-$ connqc client --addr="127.0.0.1:8123" --log.format="console"
-```
-
-To increase the amount of sent requests, reduce the interval:
-
-```shell
-$ connqc client --addr="127.0.0.1:8123" --interval="200ms"
-```
-
-#### More Options
-
-The `client` command supports the following additional arguments.
-
-```shell
-OPTIONS:
-   --protocol value                     Use protocol for the connection (available: tcp, udp) (default: "tcp") [$PROTOCOL]
-   --addr value                         The address of the connqc server [$ADDR]
-   --backoff value                      The duration to wait for before retrying to connect to the server (default: 1s) [$BACKOFF]
-   --interval value                     The interval at which to send probe messages to the server (default: 1s) [$INTERVAL]
-   --read-timeout value                 The duration after which the client should timeout when reading from a connection (default: 2s) [$READ_TIMEOUT]
-   --write-timeout value                The duration after which the client should timeout when writing to a connection (default: 5s) [$WRITE_TIMEOUT]
-   --log.format value                   Specify the format of logs. Supported formats: 'logfmt', 'json', 'console' [$LOG_FORMAT]
-   --log.level value                    Specify the log level. e.g. 'debug', 'info', 'error'. (default: "info") [$LOG_LEVEL]
-   --log.ctx value [ --log.ctx value ]  A list of context field appended to every log. Format: key=value. [$LOG_CTX]
-   --help, -h                           show help
-
-```
+The standalone client reports aggregate loss / latency percentiles / jitter, exposes
+Prometheus metrics, and supports variable payload sizes (MTU sweep) and bursts. Run
+`connqc <command> --help` for all flags.
 
 ## License
 

@@ -1,0 +1,51 @@
+{
+  "title": "Artemis Mesh",
+  "uid": "artemis-mesh",
+  "schemaVersion": 39,
+  "editable": true,
+  "time": { "from": "now-15m", "to": "now" },
+  "refresh": "5s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Agents online",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [ { "refId": "A", "expr": "sum(artemis_agents{status=\"online\"})" } ]
+    },
+    {
+      "id": 2,
+      "title": "Active alerts",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] } } },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [ { "refId": "A", "expr": "sum(artemis_alerts_active)" } ]
+    },
+    {
+      "id": 3,
+      "title": "Edge p95 latency (ms)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 4 },
+      "targets": [ { "refId": "A", "expr": "artemis_edge_latency_p95_seconds * 1000", "legendFormat": "{{src}} → {{dst}}" } ]
+    },
+    {
+      "id": 4,
+      "title": "Edge loss %",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 4 },
+      "targets": [ { "refId": "A", "expr": "artemis_edge_loss_percent", "legendFormat": "{{src}} → {{dst}}" } ]
+    },
+    {
+      "id": 5,
+      "title": "Edge jitter (ms)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 13 },
+      "targets": [ { "refId": "A", "expr": "artemis_edge_jitter_seconds * 1000", "legendFormat": "{{src}} → {{dst}}" } ]
+    }
+  ]
+}
