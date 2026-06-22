@@ -114,6 +114,21 @@ func (m *Manager) publishAlert(a store.Alert) {
 	m.bcast.Publish(data)
 }
 
+// InjectFault tells the named agent to drop lossPercent% of received probes for
+// durationMs (fault injection for tests/demos). Returns false if no such agent.
+func (m *Manager) InjectFault(agentName string, lossPercent float64, durationMs int64) bool {
+	var found bool
+	m.reg.ForEach(func(a *Agent) {
+		if a.Info.Name == agentName {
+			a.Send(&pb.ManagerMessage{Msg: &pb.ManagerMessage_Fault{
+				Fault: &pb.Fault{LossPercent: lossPercent, DurationMs: durationMs},
+			}})
+			found = true
+		}
+	})
+	return found
+}
+
 // EvaluateAlerts runs one alert evaluation pass over the current mesh state.
 func (m *Manager) EvaluateAlerts() {
 	now := time.Now()

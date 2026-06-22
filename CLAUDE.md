@@ -112,6 +112,7 @@ Proto toolchain: `go install github.com/bufbuild/buf/cmd/buf@latest`,
 - DB-backed code is verified against real Postgres/ClickHouse via docker (see `docker/docker-compose.yml`).
 - Manager `/metrics` exposes `artemis_edge_{loss_percent,latency_p95_seconds,jitter_seconds,throughput_bytes}`, `artemis_alerts_active`, `artemis_agents`.
 - SSE: `curl -N localhost:8080/api/stream` shows live `{"type":"edge"|"alert",...}` events.
+- Fault injection: run the manager with `--dev`, then `POST /api/debug/inject {agent,loss_percent,duration_ms}` (or the "inject loss" button on the Agents page) makes that agent's echo listener drop probes so peers see loss. See `docs/debugging.md`.
 
 ## 8. Gotchas
 

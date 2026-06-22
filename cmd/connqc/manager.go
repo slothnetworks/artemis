@@ -69,9 +69,13 @@ func runManager(c *cli.Context) error {
 	// HTTP server (REST + SSE + UI).
 	httpAddr := c.String(flagHTTPAddr)
 	auth := api.NewAuth(c.String(flagAdminUser), c.String(flagAdminPassHash))
-	apiSrv, err := api.New(mgr, log, auth)
+	dev := c.Bool(flagDev)
+	apiSrv, err := api.New(mgr, log, auth, dev)
 	if err != nil {
 		return err
+	}
+	if dev {
+		log.Warn("Dev mode enabled — debug/fault-injection endpoints active")
 	}
 	if auth.Enabled() {
 		log.Info("UI authentication enabled")

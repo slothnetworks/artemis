@@ -30,10 +30,12 @@ type Server struct {
 	log  *logger.Logger
 	ui   *ui
 	auth *Auth
+	dev  bool
 }
 
 // New returns an API server backed by the given manager. auth may be nil (open).
-func New(mgr *manager.Manager, log *logger.Logger, auth *Auth) (*Server, error) {
+// When dev is true, the debug/fault-injection endpoints are enabled.
+func New(mgr *manager.Manager, log *logger.Logger, auth *Auth, dev bool) (*Server, error) {
 	u, err := newUI()
 	if err != nil {
 		return nil, err
@@ -41,7 +43,7 @@ func New(mgr *manager.Manager, log *logger.Logger, auth *Auth) (*Server, error) 
 	if auth == nil {
 		auth = NewAuth("", "")
 	}
-	return &Server{mgr: mgr, log: log, ui: u, auth: auth}, nil
+	return &Server{mgr: mgr, log: log, ui: u, auth: auth, dev: dev}, nil
 }
 
 // Handler returns the HTTP handler with all routes registered.
@@ -85,7 +87,42 @@ func (s *Server) Handler() http.Handler {
 	api("POST /api/silences", s.addSilence)
 	api("DELETE /api/silences/{id}", s.deleteSilence)
 	api("GET /api/stream", s.stream)
+
+	// Debug / fault-injection endpoints (dev mode only).
+	if s.dev {
+		api("POST /api/debug/inject", s.injectFault)
+		api("GET /api/debug/enabled", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, true) })
+	}
 	return mux
+}
+
+// injectFault makes an agent drop a fraction of received probes for a duration.
+// @Summary  Inject packet loss (dev only)
+// @Tags     debug
+// @Accept   json
+// @Param    body body object true "agent, loss_percent, duration_ms"
+// @Success  200 {object} map[string]bool
+// @Router   /api/debug/inject [post]
+func (s *Server) injectFault(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Agent       string  `json:"agent"`
+		LossPercent float64 `json:"loss_percent"`
+		DurationMs  int64   `json:"duration_ms"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if body.DurationMs <= 0 {
+		body.DurationMs = 30000
+	}
+	ok := s.mgr.InjectFault(body.Agent, body.LossPercent, body.DurationMs)
+	if !ok {
+		http.Error(w, `{"error":"unknown agent"}`, http.StatusNotFound)
+		return
+	}
+	s.log.Warn("Fault injected", lctx.Str("agent", body.Agent), lctx.Interface("loss_percent", body.LossPercent))
+	writeJSON(w, map[string]bool{"ok": true})
 }
 
 // alerts lists currently firing alerts.

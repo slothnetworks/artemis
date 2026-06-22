@@ -145,11 +145,20 @@ message RunMtr {
   string alert_id = 2;
 }
 
+// Fault injects an artificial fault on an agent's echo listener for testing:
+// the agent drops `loss_percent` of incoming probes for `duration_ms`, so peers
+// probing it observe packet loss. Dev/test only.
+message Fault {
+  double loss_percent = 1;
+  int64 duration_ms = 2;
+}
+
 // ManagerMessage is anything the manager sends to an agent.
 message ManagerMessage {
   oneof msg {
     EnrollAck enroll_ack = 1;
     Assignment assignment = 2;
     RunMtr run_mtr = 3;
+    Fault fault = 4;
   }
 }

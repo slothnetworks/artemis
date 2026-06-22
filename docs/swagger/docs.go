@@ -59,6 +59,39 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/debug/inject": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "debug"
+                ],
+                "summary": "Inject packet loss (dev only)",
+                "parameters": [
+                    {
+                        "description": "agent, loss_percent, duration_ms",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/edges/{a}/{b}/diff": {
             "get": {
                 "produces": [

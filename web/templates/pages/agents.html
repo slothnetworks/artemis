@@ -2,21 +2,31 @@
 <div class="page-head"><h1>Agents</h1></div>
 <div class="card">
     <table>
-        <thead><tr><th>Name</th><th>Group</th><th>Listen</th><th>IPv4</th><th>Status</th><th>Last seen</th></tr></thead>
-        <tbody id="rows"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
+        <thead><tr><th>Name</th><th>Group</th><th>Listen</th><th>IPv4</th><th>Status</th><th>Last seen</th><th id="debug-head" class="hidden"></th></tr></thead>
+        <tbody id="rows"><tr><td colspan="7" class="empty">loading…</td></tr></tbody>
     </table>
 </div>
 {{end}}
 
 {{define "page-script"}}
 <script>
+let devMode = false;
+
+async function checkDev() {
+    try { await api("GET", "/api/debug/enabled"); devMode = true; document.getElementById("debug-head").classList.remove("hidden"); }
+    catch { devMode = false; }
+}
+
 async function load() {
     const agents = await api("GET", "/api/agents");
     const tb = document.getElementById("rows");
-    if (!agents || !agents.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">No agents enrolled.</td></tr>'; return; }
+    if (!agents || !agents.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">No agents enrolled.</td></tr>'; return; }
     tb.innerHTML = agents.map(a => {
         const badge = a.status === "online" ? "b-ok" : "b-bad";
         const ls = a.last_seen ? new Date(a.last_seen).toLocaleTimeString() : "—";
+        const debugCell = devMode
+            ? `<td class="actions"><button class="btn btn-danger btn-xs" onclick="injectLoss('${a.name}')">inject loss</button></td>`
+            : "";
         return `<tr>
             <td style="color:#e2e8f0;font-weight:500">${a.name}</td>
             <td>${a.group ? '<span class="chip">'+a.group+'</span>' : '<span class="muted">—</span>'}</td>
@@ -24,9 +34,23 @@ async function load() {
             <td><code>${(a.ipv4||[]).join(", ")}</code></td>
             <td><span class="badge ${badge}">${a.status}</span></td>
             <td class="muted">${ls}</td>
+            ${debugCell}
         </tr>`;
     }).join("");
 }
-load(); setInterval(load, 3000);
+
+// injectLoss makes the agent drop a % of received probes for N seconds, so its
+// peers observe packet loss (dev mode only).
+window.injectLoss = async (agent) => {
+    const pct = parseFloat(prompt(`Drop what %% of probes received by "${agent}"?`, "50"));
+    if (isNaN(pct)) return;
+    const secs = parseFloat(prompt("For how many seconds?", "30")) || 30;
+    try {
+        await api("POST", "/api/debug/inject", { agent, loss_percent: pct, duration_ms: Math.round(secs * 1000) });
+        toast(`injecting ${pct}% loss on ${agent} for ${secs}s`);
+    } catch (e) { toast(e.message, true); }
+};
+
+checkDev().then(load).then(() => setInterval(load, 3000));
 </script>
 {{end}}

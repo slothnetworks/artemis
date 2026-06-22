@@ -3,7 +3,9 @@ package probe
 import (
 	"errors"
 	"io"
+	"math/rand"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/hamba/logger/v2"
@@ -16,7 +18,21 @@ type Server struct {
 	readTimeout  time.Duration
 	writeTimeout time.Duration
 
+	dropPermille atomic.Int64 // fault injection: per-mille of probes to drop
+
 	log *logger.Logger
+}
+
+// SetDropRate sets the fraction (0..1) of received probes the server silently
+// drops instead of echoing. Used for fault injection in tests/demos.
+func (s *Server) SetDropRate(p float64) {
+	if p < 0 {
+		p = 0
+	}
+	if p > 1 {
+		p = 1
+	}
+	s.dropPermille.Store(int64(p * 1000))
 }
 
 // NewServer returns a server.
@@ -61,6 +77,12 @@ func (s *Server) Serve(conn net.PacketConn) { //nolint:cyclop // Simplify readab
 			}
 		}
 		log.Debug("Message received", lctx.Str("data", string(buf[:n])))
+
+		// Fault injection: silently drop a fraction of probes so peers see loss.
+		if dp := s.dropPermille.Load(); dp > 0 && rand.Int63n(1000) < dp {
+			log.Debug("Dropping probe (fault injection)")
+			continue
+		}
 
 		_ = conn.SetWriteDeadline(time.Now().Add(s.writeTimeout))
 

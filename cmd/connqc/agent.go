@@ -46,6 +46,10 @@ func runAgent(c *cli.Context) error {
 		cfg.Name = cfg.ListenAddr
 	}
 
+	if c.Bool(flagDev) {
+		log.Warn("Dev mode enabled")
+	}
+
 	go func() {
 		if err := agent.New(cfg, log).Run(ctx); err != nil {
 			log.Error("Agent stopped", lctx.Err(err))

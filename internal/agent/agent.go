@@ -57,6 +57,7 @@ type Agent struct {
 	log  *logger.Logger
 
 	runCtx      context.Context
+	echo        *probe.Server
 	mu          sync.Mutex
 	probers     map[string]context.CancelFunc // keyed by target addr
 	targetNames map[string]string             // target addr → peer name
@@ -160,6 +161,23 @@ func (a *Agent) startProber(t *pb.Target) context.CancelFunc {
 	return cancel
 }
 
+// injectFault makes this agent's echo listener drop lossPercent% of incoming
+// probes for the given duration, so peers probing it observe packet loss.
+func (a *Agent) injectFault(lossPercent float64, dur time.Duration) {
+	if a.echo == nil {
+		return
+	}
+	if dur <= 0 {
+		dur = 30 * time.Second
+	}
+	a.log.Warn("Injecting fault", lctx.Interface("loss_percent", lossPercent), lctx.Duration("duration", dur))
+	a.echo.SetDropRate(lossPercent / 100)
+	time.AfterFunc(dur, func() {
+		a.echo.SetDropRate(0)
+		a.log.Info("Fault injection cleared")
+	})
+}
+
 // staticTargets converts the agent's configured static targets to pb.Targets.
 func staticTargets(cfg Config) []*pb.Target {
 	out := make([]*pb.Target, 0, len(cfg.Targets))
@@ -172,6 +190,7 @@ func staticTargets(cfg Config) []*pb.Target {
 func (a *Agent) serveEcho(ctx context.Context) {
 	const bufferSize = 65535
 	srv := probe.NewServer(bufferSize, a.cfg.ReadTimeout, a.cfg.WriteTimeout, a.log)
+	a.echo = srv
 	tcpSrv, err := tcp.NewServer(srv)
 	if err != nil {
 		a.log.Error("Echo TCP server init", lctx.Err(err))
@@ -257,8 +276,8 @@ func (a *Agent) recvLoop(stream pb.AgentLink_LinkClient) {
 		switch v := msg.Msg.(type) {
 		case *pb.ManagerMessage_Assignment:
 			a.applyAssignment(v.Assignment.GetTargets())
-		case *pb.ManagerMessage_RunMtr:
-			// Phase 9 runs a one-shot MTR here.
+		case *pb.ManagerMessage_Fault:
+			a.injectFault(v.Fault.GetLossPercent(), time.Duration(v.Fault.GetDurationMs())*time.Millisecond)
 		}
 	}
 }

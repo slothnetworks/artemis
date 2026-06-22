@@ -226,6 +226,27 @@ paths:
       summary: Active alerts
       tags:
       - alerts
+  /api/debug/inject:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: agent, loss_percent, duration_ms
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+      summary: Inject packet loss (dev only)
+      tags:
+      - debug
   /api/edges/{a}/{b}/diff:
     get:
       parameters:

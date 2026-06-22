@@ -41,6 +41,7 @@ services:
       - --grpc-addr=:8443
       - --postgres-dsn=postgres://artemis:artemis@postgres:5432/artemis
       - --clickhouse-dsn=clickhouse://artemis:artemis@clickhouse:9000/artemis
+      - --dev
     environment:
       LOG_FORMAT: logfmt
     ports:
@@ -53,14 +54,16 @@ services:
 
   agent-a:
     <<: *agent-defaults
-    command: [agent, --manager-addr=manager:8443, --agent-name=agent-a, --group=us, --addr=:8123]
+    command: [agent, --manager-addr=manager:8443, --agent-name=agent-a, --group=us, --addr=:8123, --dev]
   agent-b:
     <<: *agent-defaults
-    command: [agent, --manager-addr=manager:8443, --agent-name=agent-b, --group=us, --addr=:8123]
+    command: [agent, --manager-addr=manager:8443, --agent-name=agent-b, --group=us, --addr=:8123, --dev]
   agent-c:
     <<: *agent-defaults
-    command: [agent, --manager-addr=manager:8443, --agent-name=agent-c, --group=eu, --addr=:8123]
-
+    command: [agent, --manager-addr=manager:8443, --agent-name=agent-c, --group=eu, --addr=:8123, --dev]
+  agent-d:
+    <<: *agent-defaults
+    command: [agent, --manager-addr=manager:8443, --agent-name=agent-d, --group=eu, --addr=:8123]
   prometheus:
     image: prom/prometheus:v2.54.1
     volumes:

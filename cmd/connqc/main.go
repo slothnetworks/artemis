@@ -40,6 +40,7 @@ const (
 	flagClickHouseDSN = "clickhouse-dsn"
 	flagAdminUser     = "admin-user"
 	flagAdminPassHash = "admin-pass-hash"
+	flagDev           = "dev"
 	flagManagerAddr   = "manager-addr"
 	flagAgentName     = "agent-name"
 	flagGroup         = "group"
@@ -190,6 +191,11 @@ var commands = []*cli.Command{
 				Usage:   "Bcrypt hash of the admin password (generate with 'connqc hashpw')",
 				EnvVars: []string{strcase.ToSNAKE(flagAdminPassHash)},
 			},
+			&cli.BoolFlag{
+				Name:    flagDev,
+				Usage:   "Enable dev mode (debug + fault-injection endpoints)",
+				EnvVars: []string{strcase.ToSNAKE(flagDev)},
+			},
 		}.Merge(cmd.LogFlags),
 		Action: runManager,
 	},
@@ -281,6 +287,11 @@ var commands = []*cli.Command{
 				Usage:   "Probe payload size in bytes (0 = default text payload)",
 				Value:   0,
 				EnvVars: []string{strcase.ToSNAKE(flagPayloadSize)},
+			},
+			&cli.BoolFlag{
+				Name:    flagDev,
+				Usage:   "Enable dev mode (verbose fault-injection logging)",
+				EnvVars: []string{strcase.ToSNAKE(flagDev)},
 			},
 		}.Merge(cmd.LogFlags),
 		Action: runAgent,
