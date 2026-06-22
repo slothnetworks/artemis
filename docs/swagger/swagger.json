@@ -52,6 +52,34 @@
                 }
             }
         },
+        "/api/alerts/{id}/mtr": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "alerts"
+                ],
+                "summary": "Alert MTR evidence",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "alert id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_slothnetworks_artemis_internal_manager.MtrEvidence"
+                        }
+                    }
+                }
+            }
+        },
         "/api/debug/inject": {
             "post": {
                 "consumes": [
@@ -433,6 +461,29 @@
                     "type": "integer"
                 },
                 "protocol": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_slothnetworks_artemis_internal_manager.MtrEvidence": {
+            "type": "object",
+            "properties": {
+                "alert_id": {
+                    "type": "string"
+                },
+                "at": {
+                    "type": "string"
+                },
+                "dst": {
+                    "type": "string"
+                },
+                "output": {
+                    "type": "string"
+                },
+                "src": {
+                    "type": "string"
+                },
+                "tool": {
                     "type": "string"
                 }
             }

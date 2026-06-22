@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -56,6 +57,19 @@ type Manager struct {
 	alerts     *alerting.Engine
 	silences   *alerting.Silences
 	log        *logger.Logger
+
+	mtrMu sync.Mutex
+	mtr   map[string]MtrEvidence // alert id → MTR evidence
+}
+
+// MtrEvidence is a one-shot MTR/traceroute capture attached to an alert.
+type MtrEvidence struct {
+	AlertID string    `json:"alert_id"`
+	Src     string    `json:"src"`
+	Dst     string    `json:"dst"`
+	Tool    string    `json:"tool"`
+	Output  string    `json:"output"`
+	At      time.Time `json:"at"`
 }
 
 // Option configures a Manager.
@@ -92,9 +106,33 @@ func New(log *logger.Logger, opts ...Option) *Manager {
 	for _, opt := range opts {
 		opt(m)
 	}
+	m.mtr = make(map[string]MtrEvidence)
 	m.silences = alerting.NewSilences()
 	m.alerts = alerting.New(alerting.Config{}, m.alertSink, alerting.NewLogNotifier(log), m.silences, m.publishAlert)
 	return m
+}
+
+// MTR returns the MTR evidence captured for an alert, if any.
+func (m *Manager) MTR(alertID string) (MtrEvidence, bool) {
+	m.mtrMu.Lock()
+	defer m.mtrMu.Unlock()
+	ev, ok := m.mtr[alertID]
+	return ev, ok
+}
+
+// triggerMTR asks the alert's source agent to run a one-shot MTR toward the
+// destination (only for edge alerts — agent-level alerts have no edge).
+func (m *Manager) triggerMTR(a store.Alert) {
+	if a.Dst == "" {
+		return
+	}
+	m.reg.ForEach(func(ag *Agent) {
+		if ag.Info.Name == a.Src {
+			ag.Send(&pb.ManagerMessage{Msg: &pb.ManagerMessage_RunMtr{RunMtr: &pb.RunMtr{
+				Edge: &pb.Edge{Src: a.Src, Dst: a.Dst}, AlertId: a.ID,
+			}}})
+		}
+	})
 }
 
 // Alerts returns the currently firing alerts.
@@ -108,10 +146,13 @@ func (m *Manager) publishAlert(a store.Alert) {
 		Type string `json:"type"`
 		store.Alert
 	}{Type: "alert", Alert: a})
-	if err != nil {
-		return
+	if err == nil {
+		m.bcast.Publish(data)
 	}
-	m.bcast.Publish(data)
+	// On a new firing alert, capture an MTR snapshot from the source agent.
+	if a.State == "firing" {
+		go m.triggerMTR(a)
+	}
 }
 
 // InjectFault tells the named agent to drop lossPercent% of received probes for
@@ -293,8 +334,25 @@ func (m *Manager) handleAgentMessage(src string, msg *pb.AgentMessage) {
 			m.log.Error("Persist event", lctx.Err(err))
 		}
 	case *pb.AgentMessage_MtrSnapshot:
-		// Persisted/attached in a later phase.
-		m.log.Info("MTR snapshot", lctx.Str("src", src), lctx.Str("dst", v.MtrSnapshot.GetEdge().GetDst()))
+		s := v.MtrSnapshot
+		ev := MtrEvidence{
+			AlertID: s.GetAlertId(),
+			Src:     src,
+			Dst:     s.GetEdge().GetDst(),
+			Tool:    s.GetTool(),
+			Output:  s.GetRawOutput(),
+			At:      s.GetStartedAt().AsTime(),
+		}
+		m.mtrMu.Lock()
+		m.mtr[ev.AlertID] = ev
+		m.mtrMu.Unlock()
+		m.log.Info("MTR evidence stored", lctx.Str("alert", ev.AlertID), lctx.Str("tool", ev.Tool))
+		if data, err := json.Marshal(struct {
+			Type string `json:"type"`
+			MtrEvidence
+		}{Type: "mtr", MtrEvidence: ev}); err == nil {
+			m.bcast.Publish(data)
+		}
 	}
 }
 

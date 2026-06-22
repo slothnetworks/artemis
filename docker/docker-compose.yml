@@ -6,6 +6,8 @@ x-agent: &agent-defaults
   build: { context: .., dockerfile: docker/Dockerfile }
   depends_on: { manager: { condition: service_started } }
   restart: unless-stopped
+  # NET_RAW lets the agent run mtr/traceroute for MTR-on-alert capture.
+  cap_add: [NET_RAW]
 
 services:
   postgres:

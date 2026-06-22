@@ -7,12 +7,14 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os/exec"
 	"sync"
 	"time"
 
 	"github.com/hamba/logger/v2"
 	lctx "github.com/hamba/logger/v2/ctx"
 	"github.com/slothnetworks/artemis/internal/manager"
+	"github.com/slothnetworks/artemis/internal/mtr"
 	pb "github.com/slothnetworks/artemis/internal/pb/artemis/v1"
 	"github.com/slothnetworks/artemis/internal/pbconv"
 	"github.com/slothnetworks/artemis/internal/probe"
@@ -61,6 +63,7 @@ type Agent struct {
 	mu          sync.Mutex
 	probers     map[string]context.CancelFunc // keyed by target addr
 	targetNames map[string]string             // target addr → peer name
+	sendMu      sync.Mutex                    // serializes stream.Send across goroutines
 }
 
 // New returns an Agent.
@@ -278,6 +281,8 @@ func (a *Agent) recvLoop(stream pb.AgentLink_LinkClient) {
 			a.applyAssignment(v.Assignment.GetTargets())
 		case *pb.ManagerMessage_Fault:
 			a.injectFault(v.Fault.GetLossPercent(), time.Duration(v.Fault.GetDurationMs())*time.Millisecond)
+		case *pb.ManagerMessage_RunMtr:
+			go a.runMTR(stream, v.RunMtr.GetEdge(), v.RunMtr.GetAlertId())
 		}
 	}
 }
@@ -291,7 +296,7 @@ func (a *Agent) flush(stream pb.AgentLink_LinkClient) error {
 			dst = name
 		}
 		a.mu.Unlock()
-		if err := stream.Send(&pb.AgentMessage{Msg: &pb.AgentMessage_Sample{Sample: &pb.Sample{
+		if err := a.send(stream, &pb.AgentMessage{Msg: &pb.AgentMessage_Sample{Sample: &pb.Sample{
 			Edge:     &pb.Edge{Src: a.cfg.Name, Dst: dst},
 			Snapshot: pbconv.SnapshotToPB(snap),
 			Ts:       timestamppb.New(now),
@@ -300,6 +305,74 @@ func (a *Agent) flush(stream pb.AgentLink_LinkClient) error {
 		}
 	}
 	return nil
+}
+
+// send serializes Send calls so the flush loop and MTR goroutine don't race on
+// the stream.
+func (a *Agent) send(stream pb.AgentLink_LinkClient, msg *pb.AgentMessage) error {
+	a.sendMu.Lock()
+	defer a.sendMu.Unlock()
+	return stream.Send(msg)
+}
+
+// addrForName reverse-looks-up a peer's probe address from its name.
+func (a *Agent) addrForName(name string) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for addr, n := range a.targetNames {
+		if n == name {
+			return addr
+		}
+	}
+	return ""
+}
+
+// runMTR runs a one-shot mtr/traceroute toward the edge's destination and streams
+// the captured output back to the manager as evidence for the alert.
+func (a *Agent) runMTR(stream pb.AgentLink_LinkClient, edge *pb.Edge, alertID string) {
+	addr := a.addrForName(edge.GetDst())
+	if addr == "" {
+		addr = edge.GetDst()
+	}
+	host := addr
+	if h, _, err := net.SplitHostPort(addr); err == nil {
+		host = h
+	}
+	started := time.Now()
+	out, hops, tool := a.mtrCapture(host)
+	a.log.Info("MTR captured", lctx.Str("dst", edge.GetDst()), lctx.Str("tool", tool), lctx.Int("hops", len(hops)))
+	_ = a.send(stream, &pb.AgentMessage{Msg: &pb.AgentMessage_MtrSnapshot{MtrSnapshot: &pb.MtrSnapshot{
+		Edge:      edge,
+		AlertId:   alertID,
+		RawOutput: out,
+		Hops:      hops,
+		Tool:      tool,
+		StartedAt: timestamppb.New(started),
+	}}})
+}
+
+// mtrCapture runs the native Go MTR engine toward host, returning a rendered
+// text report, the structured hops, and the tool name. On failure (e.g. missing
+// CAP_NET_RAW) it falls back to the system traceroute.
+func (a *Agent) mtrCapture(host string) (string, []*pb.MtrHop, string) {
+	ctx, cancel := context.WithTimeout(a.runCtx, 25*time.Second)
+	defer cancel()
+
+	if res, err := mtr.Capture(ctx, host, 3); err == nil {
+		hops := make([]*pb.MtrHop, 0, len(res.Hops))
+		for _, h := range res.Hops {
+			hops = append(hops, &pb.MtrHop{Hop: int32(h.Number), Host: h.IP, LossPct: h.LossPct, AvgMs: h.AvgMs})
+		}
+		return mtr.Render(res), hops, "native"
+	} else {
+		a.log.Debug("Native MTR failed, falling back to traceroute", lctx.Err(err))
+	}
+
+	if path, err := exec.LookPath("traceroute"); err == nil {
+		out, _ := exec.CommandContext(ctx, path, "-n", "-w", "2", host).CombinedOutput()
+		return string(out), nil, "traceroute"
+	}
+	return "native MTR failed and traceroute not available", nil, "none"
 }
 
 // localIPs returns the agent's own non-loopback, non-link-local IPv4 and IPv6

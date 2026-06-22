@@ -83,6 +83,7 @@ func (s *Server) Handler() http.Handler {
 	api("GET /api/edges/{src}/{dst}/series", s.series)
 	api("GET /api/edges/{a}/{b}/diff", s.diff)
 	api("GET /api/alerts", s.alerts)
+	api("GET /api/alerts/{id}/mtr", s.alertMTR)
 	api("GET /api/silences", s.listSilences)
 	api("POST /api/silences", s.addSilence)
 	api("DELETE /api/silences/{id}", s.deleteSilence)
@@ -134,6 +135,22 @@ func (s *Server) injectFault(w http.ResponseWriter, r *http.Request) {
 func (s *Server) alerts(w http.ResponseWriter, _ *http.Request) {
 	var out []store.Alert = s.mgr.Alerts()
 	writeJSON(w, out)
+}
+
+// alertMTR returns the MTR/traceroute evidence captured for an alert.
+// @Summary  Alert MTR evidence
+// @Tags     alerts
+// @Produce  json
+// @Param    id path string true "alert id"
+// @Success  200 {object} manager.MtrEvidence
+// @Router   /api/alerts/{id}/mtr [get]
+func (s *Server) alertMTR(w http.ResponseWriter, r *http.Request) {
+	ev, ok := s.mgr.MTR(r.PathValue("id"))
+	if !ok {
+		http.Error(w, `{"error":"no MTR captured for this alert"}`, http.StatusNotFound)
+		return
+	}
+	writeJSON(w, ev)
 }
 
 // listSilences lists active silences.

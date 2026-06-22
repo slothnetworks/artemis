@@ -40,6 +40,12 @@ latency (p95), high jitter, agent-down, and size-mismatch (event-driven). Alerts
 stateful (open/resolve), silence-aware, persisted to Postgres, broadcast over SSE, and
 delivered to notifiers (log by default; webhook drop-in).
 
+When an **edge** alert opens, the manager asks the source agent to run a one-shot
+`mtr`/`traceroute` toward the destination; the captured output is attached to the
+alert (`GET /api/alerts/{id}/mtr`) and shown via the "MTR" button on the Alerts page.
+Agents need the `mtr`/`traceroute` binary + `CAP_NET_RAW` (the compose agents have
+both).
+
 ## Data integrity
 
 Each probe payload self-describes its length + CRC32 (`internal/probe/payload.go`).

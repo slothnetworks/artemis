@@ -1,0 +1,3 @@
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS uid TEXT;
+
+CREATE INDEX IF NOT EXISTS alerts_uid_idx ON alerts (uid)

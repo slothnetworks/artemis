@@ -72,6 +72,21 @@ definitions:
       protocol:
         type: string
     type: object
+  github_com_slothnetworks_artemis_internal_manager.MtrEvidence:
+    properties:
+      alert_id:
+        type: string
+      at:
+        type: string
+      dst:
+        type: string
+      output:
+        type: string
+      src:
+        type: string
+      tool:
+        type: string
+    type: object
   github_com_slothnetworks_artemis_internal_manager.TimedSnapshot:
     properties:
       at:
@@ -224,6 +239,24 @@ paths:
               $ref: '#/definitions/github_com_slothnetworks_artemis_internal_store.Alert'
             type: array
       summary: Active alerts
+      tags:
+      - alerts
+  /api/alerts/{id}/mtr:
+    get:
+      parameters:
+      - description: alert id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_slothnetworks_artemis_internal_manager.MtrEvidence'
+      summary: Alert MTR evidence
       tags:
       - alerts
   /api/debug/inject:

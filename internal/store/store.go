@@ -45,7 +45,8 @@ type SampleSink interface {
 
 // Alert is a stateful, grouped alert derived from events/samples.
 type Alert struct {
-	ID          string    `json:"id"`
+	ID          string    `json:"id"`  // deterministic dedup key: src|dst|rule
+	UID         string    `json:"uid"` // stable per-incident UUID (for URLs)
 	Src         string    `json:"src"`
 	Dst         string    `json:"dst"`
 	Rule        string    `json:"rule"`
