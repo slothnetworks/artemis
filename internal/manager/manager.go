@@ -112,16 +112,22 @@ func New(log *logger.Logger, opts ...Option) *Manager {
 	return m
 }
 
-// MTR returns the MTR evidence captured for an alert, if any.
-func (m *Manager) MTR(alertID string) (MtrEvidence, bool) {
+// MTR returns the MTR evidence captured for an alert UID, if any.
+func (m *Manager) MTR(uid string) (MtrEvidence, bool) {
 	m.mtrMu.Lock()
 	defer m.mtrMu.Unlock()
-	ev, ok := m.mtr[alertID]
+	ev, ok := m.mtr[uid]
 	return ev, ok
 }
 
+// AlertByUID returns the active alert with the given UID.
+func (m *Manager) AlertByUID(uid string) (store.Alert, bool) {
+	return m.alerts.ByUID(uid)
+}
+
 // triggerMTR asks the alert's source agent to run a one-shot MTR toward the
-// destination (only for edge alerts — agent-level alerts have no edge).
+// destination (only for edge alerts — agent-level alerts have no edge). The
+// snapshot is keyed by the alert UID.
 func (m *Manager) triggerMTR(a store.Alert) {
 	if a.Dst == "" {
 		return
@@ -129,7 +135,7 @@ func (m *Manager) triggerMTR(a store.Alert) {
 	m.reg.ForEach(func(ag *Agent) {
 		if ag.Info.Name == a.Src {
 			ag.Send(&pb.ManagerMessage{Msg: &pb.ManagerMessage_RunMtr{RunMtr: &pb.RunMtr{
-				Edge: &pb.Edge{Src: a.Src, Dst: a.Dst}, AlertId: a.ID,
+				Edge: &pb.Edge{Src: a.Src, Dst: a.Dst}, AlertId: a.UID,
 			}}})
 		}
 	})

@@ -59,6 +59,34 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/alerts/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "alerts"
+                ],
+                "summary": "Get alert",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "alert uid",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_slothnetworks_artemis_internal_store.Alert"
+                        }
+                    }
+                }
+            }
+        },
         "/api/alerts/{id}/mtr": {
             "get": {
                 "produces": [
@@ -601,6 +629,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "id": {
+                    "description": "deterministic dedup key: src|dst|rule",
                     "type": "string"
                 },
                 "last_event_at": {
@@ -629,6 +658,10 @@ const docTemplate = `{
                 },
                 "state": {
                     "description": "firing | resolved",
+                    "type": "string"
+                },
+                "uid": {
+                    "description": "stable per-incident UUID (for URLs)",
                     "type": "string"
                 }
             }

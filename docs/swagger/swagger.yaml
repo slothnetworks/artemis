@@ -158,6 +158,7 @@ definitions:
       event_count:
         type: integer
       id:
+        description: 'deterministic dedup key: src|dst|rule'
         type: string
       last_event_at:
         type: string
@@ -177,6 +178,9 @@ definitions:
         type: string
       state:
         description: firing | resolved
+        type: string
+      uid:
+        description: stable per-incident UUID (for URLs)
         type: string
     type: object
   internal_api.meshDoc:
@@ -239,6 +243,24 @@ paths:
               $ref: '#/definitions/github_com_slothnetworks_artemis_internal_store.Alert'
             type: array
       summary: Active alerts
+      tags:
+      - alerts
+  /api/alerts/{id}:
+    get:
+      parameters:
+      - description: alert uid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_slothnetworks_artemis_internal_store.Alert'
+      summary: Get alert
       tags:
       - alerts
   /api/alerts/{id}/mtr:

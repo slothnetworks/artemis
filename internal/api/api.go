@@ -68,6 +68,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /agents", s.auth.guard(false, s.page("agents")))
 	mux.HandleFunc("GET /mesh", s.auth.guard(false, s.page("mesh")))
 	mux.HandleFunc("GET /alerts", s.auth.guard(false, s.page("alerts")))
+	mux.HandleFunc("GET /alerts/{id}", s.auth.guard(false, s.page("alert")))
 	mux.HandleFunc("GET /diff", s.auth.guard(false, s.page("diff")))
 
 	// Swagger UI (guarded like the rest of the UI).
@@ -83,6 +84,7 @@ func (s *Server) Handler() http.Handler {
 	api("GET /api/edges/{src}/{dst}/series", s.series)
 	api("GET /api/edges/{a}/{b}/diff", s.diff)
 	api("GET /api/alerts", s.alerts)
+	api("GET /api/alerts/{id}", s.alertByUID)
 	api("GET /api/alerts/{id}/mtr", s.alertMTR)
 	api("GET /api/silences", s.listSilences)
 	api("POST /api/silences", s.addSilence)
@@ -135,6 +137,22 @@ func (s *Server) injectFault(w http.ResponseWriter, r *http.Request) {
 func (s *Server) alerts(w http.ResponseWriter, _ *http.Request) {
 	var out []store.Alert = s.mgr.Alerts()
 	writeJSON(w, out)
+}
+
+// alertByUID returns a single active alert by its UID.
+// @Summary  Get alert
+// @Tags     alerts
+// @Produce  json
+// @Param    id path string true "alert uid"
+// @Success  200 {object} store.Alert
+// @Router   /api/alerts/{id} [get]
+func (s *Server) alertByUID(w http.ResponseWriter, r *http.Request) {
+	a, ok := s.mgr.AlertByUID(r.PathValue("id"))
+	if !ok {
+		http.Error(w, `{"error":"alert not found"}`, http.StatusNotFound)
+		return
+	}
+	writeJSON(w, a)
 }
 
 // alertMTR returns the MTR/traceroute evidence captured for an alert.

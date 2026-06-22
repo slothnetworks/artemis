@@ -1,0 +1,85 @@
+{{define "content"}}
+<div class="crumb"><a href="/alerts">Alerts</a> / <span id="crumb">…</span></div>
+<div class="page-head"><h1 id="title">Alert</h1></div>
+
+<div class="card">
+    <div class="card-head">Details</div>
+    <div class="card-body">
+        <table>
+            <tbody id="details"><tr><td class="empty">loading…</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card hidden" id="graph-card">
+    <div class="card-head" id="graph-title">Edge latency / loss</div>
+    <div class="card-body"><div id="chart" style="width:100%;height:220px"></div></div>
+</div>
+
+<div class="card" id="mtr-card">
+    <div class="card-head">MTR — path at fault time</div>
+    <div class="card-body"><pre id="mtr-out" style="max-height:360px">capturing…</pre></div>
+</div>
+{{end}}
+
+{{define "page-script"}}
+<script src="/static/js/vendor/uplot.iife.min.js"></script>
+<script>
+const uid = location.pathname.split("/").pop();
+
+function row(k, v) { return `<tr><td class="muted" style="width:160px">${k}</td><td>${v}</td></tr>`; }
+
+async function loadAlert() {
+    let a;
+    try { a = await api("GET", `/api/alerts/${encodeURIComponent(uid)}`); }
+    catch { document.getElementById("details").innerHTML = '<tr><td class="empty">Alert not found (it may have resolved).</td></tr>'; return null; }
+
+    const sev = a.severity === "critical" ? "b-bad" : "b-warn";
+    const edge = a.dst ? `${a.src} → ${a.dst}` : a.src;
+    document.getElementById("title").textContent = `${a.rule} — ${edge}`;
+    document.getElementById("crumb").textContent = a.rule;
+    document.getElementById("details").innerHTML =
+        row("Severity", `<span class="badge ${sev}">${a.severity}</span>`) +
+        row("State", `<span class="chip">${a.state}</span>${a.silenced ? ' <span class="muted">(silenced)</span>' : ''}`) +
+        row("Edge", `<code>${edge}</code>`) +
+        row("Reason", a.reason || "—") +
+        row("Started", a.started_at ? new Date(a.started_at).toLocaleString() : "—") +
+        row("Events", a.event_count) +
+        row("UID", `<code>${a.uid}</code>`);
+    return a;
+}
+
+async function loadGraph(a) {
+    if (!a.dst) return;
+    const series = await api("GET", `/api/edges/${encodeURIComponent(a.src)}/${encodeURIComponent(a.dst)}/series`);
+    if (!series || !series.length) return;
+    const xs = [], p95 = [], loss = [];
+    series.forEach(pt => { xs.push(new Date(pt.at).getTime()/1000); p95.push((pt.snap.p95||0)/1e6); loss.push(pt.snap.loss_pct||0); });
+    document.getElementById("graph-title").textContent = `${a.src} → ${a.dst} — latency / loss`;
+    document.getElementById("graph-card").classList.remove("hidden");
+    new uPlot({ width: document.getElementById("chart").clientWidth, height: 220,
+        series: [{}, { label: "p95 ms", stroke: "#6366f1" }, { label: "loss %", stroke: "#f87171", scale: "%" }],
+        scales: { "%": { side: 1 } }, axes: [{ stroke:"#94a3b8" }, { stroke:"#94a3b8" }, { side:1, scale:"%", stroke:"#94a3b8" }],
+    }, [xs, p95, loss], document.getElementById("chart"));
+}
+
+async function loadMTR() {
+    const out = document.getElementById("mtr-out");
+    try {
+        const ev = await api("GET", `/api/alerts/${encodeURIComponent(uid)}/mtr`);
+        out.textContent = ev.output || "(empty)";
+    } catch {
+        out.textContent = "MTR is still being captured — refresh in a few seconds.";
+    }
+}
+
+(async () => {
+    const a = await loadAlert();
+    if (!a) return;
+    loadGraph(a);
+    loadMTR();
+    // MTR capture takes a few seconds; retry once.
+    setTimeout(loadMTR, 6000);
+})();
+</script>
+{{end}}

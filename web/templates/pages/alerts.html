@@ -9,11 +9,6 @@
     </table>
 </div>
 
-<div class="card hidden" id="mtr-panel">
-    <div class="card-head" id="mtr-title">MTR evidence</div>
-    <div class="card-body"><pre id="mtr-out" style="max-height:320px"></pre></div>
-</div>
-
 <div class="card">
     <div class="card-head">Silences</div>
     <div class="card-body">
@@ -42,32 +37,16 @@ async function loadAlerts() {
         const sev = a.severity === "critical" ? "b-bad" : "b-warn";
         const edge = a.dst ? `${a.src} → ${a.dst}` : a.src;
         const since = a.started_at ? new Date(a.started_at).toLocaleTimeString() : "";
-        return `<tr>
+        return `<tr class="rowlink" onclick="location.href='/alerts/${a.uid}'">
             <td><span class="badge ${sev}">${a.severity}</span></td>
             <td><span class="chip">${a.rule}</span>${a.silenced ? ' <span class="muted">(silenced)</span>' : ''}</td>
             <td><code>${edge}</code></td><td>${a.reason||""}</td><td class="muted">${since}</td>
-            <td class="actions">
-                ${a.dst ? `<button class="btn btn-ghost btn-xs" onclick="showMTR('${a.id}')">MTR</button>` : ''}
+            <td class="actions" onclick="event.stopPropagation()">
                 <button class="btn btn-ghost btn-xs" onclick="silenceRule('${a.rule}','${a.src}','${a.dst||''}')">silence</button>
             </td>
         </tr>`;
     }).join("");
 }
-
-// showMTR fetches and displays the MTR/traceroute captured when the alert fired.
-window.showMTR = async (id) => {
-    const panel = document.getElementById("mtr-panel");
-    const out = document.getElementById("mtr-out");
-    try {
-        const ev = await api("GET", `/api/alerts/${encodeURIComponent(id)}/mtr`);
-        document.getElementById("mtr-title").textContent = `MTR evidence — ${ev.src} → ${ev.dst} (${ev.tool})`;
-        out.textContent = ev.output || "(empty)";
-        panel.classList.remove("hidden");
-        panel.scrollIntoView({ behavior: "smooth" });
-    } catch (e) {
-        toast("MTR still being captured — try again in a moment", true);
-    }
-};
 async function loadSilences() {
     const sl = await api("GET", "/api/silences");
     const tb = document.getElementById("silences");

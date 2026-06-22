@@ -73,9 +73,10 @@ func (s *Sink) WriteEvent(ctx context.Context, e store.Event) error {
 // UpsertAlert inserts or updates an alert by its id.
 func (s *Sink) UpsertAlert(ctx context.Context, a store.Alert) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO alerts (id, src, dst, rule, severity, state, reason, silenced, started_at, resolved_at, last_event_at, event_count)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+		INSERT INTO alerts (id, uid, src, dst, rule, severity, state, reason, silenced, started_at, resolved_at, last_event_at, event_count)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 		ON CONFLICT (id) DO UPDATE SET
+			uid = EXCLUDED.uid,
 			severity = EXCLUDED.severity,
 			state = EXCLUDED.state,
 			reason = EXCLUDED.reason,
@@ -83,7 +84,7 @@ func (s *Sink) UpsertAlert(ctx context.Context, a store.Alert) error {
 			resolved_at = EXCLUDED.resolved_at,
 			last_event_at = EXCLUDED.last_event_at,
 			event_count = EXCLUDED.event_count`,
-		a.ID, a.Src, a.Dst, a.Rule, a.Severity, a.State, a.Reason, a.Silenced,
+		a.ID, a.UID, a.Src, a.Dst, a.Rule, a.Severity, a.State, a.Reason, a.Silenced,
 		nullTime(a.StartedAt), nullTime(a.ResolvedAt), nullTime(a.LastEventAt), a.EventCount)
 	return err
 }

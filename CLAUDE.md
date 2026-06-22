@@ -28,6 +28,7 @@ cmd/connqc/            # CLI: main.go (flags+commands), client.go, server.go, ma
 internal/
   probe/               # the probe engine + wire protocol (client.go, server.go, message.go, payload.go)
     tcp/  udp/          #   transport adapters
+  mtr/                 # native raw-socket ICMP MTR engine (ported from uptime-monitor with the author's approval)
   buffr/               # buffered reader (UDP single-read)
   stats/               # Collector/Event, RollingCollector (loss/percentiles/jitter), Snapshot, Prometheus, reporter
   manager/             # control-plane engine: manager.go (AgentLink), registry, store, broadcast(SSE), mesh, metrics, interceptor

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/slothnetworks/artemis/internal/stats"
 	"github.com/slothnetworks/artemis/internal/store"
 )
@@ -106,6 +107,18 @@ func (e *Engine) Active() []store.Alert {
 	return out
 }
 
+// ByUID returns the active alert with the given UID.
+func (e *Engine) ByUID(uid string) (store.Alert, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, a := range e.active {
+		if a.UID == uid {
+			return *a, true
+		}
+	}
+	return store.Alert{}, false
+}
+
 // Evaluate runs all rules against the current inputs and opens/resolves alerts.
 func (e *Engine) Evaluate(edges []EdgeInput, agents []AgentInput, now time.Time) {
 	desired := map[string]condition{}
@@ -183,7 +196,7 @@ func (e *Engine) Evaluate(edges []EdgeInput, agents []AgentInput, now time.Time)
 
 func (e *Engine) openLocked(key string, c condition, now time.Time) {
 	a := &store.Alert{
-		ID: key, Src: c.src, Dst: c.dst, Rule: c.rule, Severity: c.severity,
+		ID: key, UID: uuid.NewString(), Src: c.src, Dst: c.dst, Rule: c.rule, Severity: c.severity,
 		State: "firing", Reason: c.reason, StartedAt: now, LastEventAt: now, EventCount: 1,
 	}
 	a.Silenced = e.silences != nil && e.silences.Matches(*a)
